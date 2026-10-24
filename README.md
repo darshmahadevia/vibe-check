@@ -8,7 +8,7 @@ Vibe Check starts with the photo. Gemma 4 reads its mood and suggests eight song
 
 [Try Vibe Check](https://vibe-check-three-nu.vercel.app) · [Run locally](#run-locally) · [How matching works](#how-matching-works)
 
-![Vibe Check's photo upload screen](docs/screenshots/hero.png)
+![Vibe Check running on Vercel, with its current photo upload screen](docs/screenshots/vercel-desktop.png)
 
 ## Built for the hackathon
 
@@ -23,16 +23,28 @@ The comparison shows which dimensions helped a song match and which lowered its 
 ## Try the demo
 
 1. Open the [app](https://vibe-check-three-nu.vercel.app). You can get recommendations without signing in.
-2. Upload a JPEG, PNG, or WebP, drag an image onto the page, or take a photo on a supported device.
+2. Upload a JPEG, PNG, or WebP, or drag an image onto the page.
 3. Choose **Find my song**. Gemma analyzes the photo, and the app returns eight ranked suggestions.
 4. Choose a song to inspect its six mood scores, the photo evidence, and the weights behind its match score.
 5. To queue music, connect an allowlisted Spotify Premium account with an active playback device. The top verified match queues automatically when Spotify is already connected. You can also select several verified songs and add them in ranked order.
 
 For a judging walkthrough, use two photos with visibly different settings. Compare the mood profiles, inspect a lower-ranked song, then explain which weighted gaps lowered its score.
 
-The screenshots document the interface. Result screenshots use controlled recommendation responses, so they demonstrate the interaction rather than prove live model inference.
+These screenshots come from the [live Vercel app](https://vibe-check-three-nu.vercel.app/), captured on October 24, 2026. A landscape photo produced eight song suggestions and five verified Spotify recordings. The top match was "Spiegel im spiegel" at 95%. The results below use the actual service response.
 
-![Song ranking and mood comparison](docs/screenshots/results.png)
+<details>
+<summary>See the live song ranking and mood comparison</summary>
+
+![Eight live song suggestions and the six-dimension mood comparison](docs/screenshots/vercel-results.png)
+
+</details>
+
+<details>
+<summary>See the current mobile layout</summary>
+
+<img src="docs/screenshots/vercel-mobile.png" alt="The live Vibe Check upload screen at a 390-pixel mobile width" width="390" />
+
+</details>
 
 ## How matching works
 
@@ -141,7 +153,9 @@ For UI checks, run [the browser smoke expression](scripts/browser-smoke.js) in t
 
 The optional [screenshot runner](scripts/capture-docs.mjs) uses Playwright to repeat the smoke checks and capture the interface. It requires a separate Playwright installation. Set `VIBE_CHECK_URL` to choose the app origin and `VIBE_CHROME_PATH` to use an installed Chrome executable.
 
-Live acceptance is a separate check. Submit a real photo without signing in, inspect the eight suggestions and their evidence, then connect Spotify and confirm the song in the actual device queue. The [implementation record](docs/implementation-plan.md) documents the base checks and outstanding live acceptance work. Live Gemma inference and Premium queue delivery remain unverified in that record.
+On October 24, 2026, a photo submission to the deployed app returned HTTP 200 with eight Gemma-generated suggestions and five verified Spotify recordings. The screenshots above capture that run. Desktop and mobile upload screens were also checked on Vercel.
+
+Premium queue delivery still needs a separate live check. Connect an allowlisted Premium account with active playback and confirm the recommended song in the device queue. The [implementation record](docs/implementation-plan.md) describes the earlier base checks. Its missing-credentials status predates this live inference check.
 
 ## Photos and privacy
 
