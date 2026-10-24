@@ -148,8 +148,9 @@
       "Unverified top song explanation shown",
     );
     assert(
-      document.querySelectorAll("meter").length === 6,
-      "Six evidence bars shown",
+      document.querySelectorAll(".mood-row").length === 6 &&
+        document.querySelectorAll(".mood-row meter").length === 12,
+      "Six dimensions show separate photo and song scores",
     );
     assert(
       document.querySelector(".weight-row")?.textContent.includes("1.0%"),
@@ -164,7 +165,7 @@
       "Winner comparison includes six gaps",
     );
     assert(
-      document.querySelector("details").open === innerWidth >= 768,
+      document.querySelector(".analysis-detail").open === innerWidth >= 768,
       "Breakdown defaults match viewport",
     );
     assert(

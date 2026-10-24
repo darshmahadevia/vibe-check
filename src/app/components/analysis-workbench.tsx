@@ -159,20 +159,26 @@ function PreciseComparison({ rows }: { rows: AxisRow[] }) {
         <section className="mood-row" key={row.param} aria-labelledby={`axis-${row.param}`}>
           <div className="bar-label">
             <h4 id={`axis-${row.param}`}>{row.label}</h4>
-            <div className="paired-values">
-              <span className="photo-ink">Photo <strong>{row.photo}</strong></span>
-              <span className="song-ink">Song <strong>{row.song}</strong></span>
+            <span className="axis-gap">Gap {row.gap} / 10</span>
+          </div>
+          <div className="score-bars">
+            <div className="score-bar-row photo-ink">
+              <span>Photo</span>
+              <meter className="photo-meter" min={0} max={10} value={row.photo} aria-label={`${row.label} photo score`} />
+              <strong>{row.photo}<span> / 10</span></strong>
+            </div>
+            <div className="score-bar-row song-ink">
+              <span>Song</span>
+              <meter className="song-meter" min={0} max={10} value={row.song} aria-label={`${row.label} song score`} />
+              <strong>{row.song}<span> / 10</span></strong>
             </div>
           </div>
-          <div className="paired-track">
-            <meter min={0} max={10} value={row.photo} aria-label={`${row.label} photo score`} />
-            <span className="gap-link" aria-hidden="true" style={{ left: `${Math.min(row.photo, row.song) * 10}%`, width: `${row.gap * 10}%` }} />
-            <span className="photo-marker" aria-hidden="true" style={{ left: `${row.photo * 10}%` }} />
-            <span className="song-marker" aria-hidden="true" style={{ left: `${row.song * 10}%` }} />
-          </div>
           <div className="bar-ends"><span>0 · {row.ends[0]}</span><span>{row.ends[1]} · 10</span></div>
-          <p>{row.evidence}</p>
-          <div className="axis-impact"><span>Gap {row.gap} / 10</span><span>{number.format(row.penalty)} points from match</span></div>
+          <div className="axis-impact"><span>{number.format(row.penalty)} weighted match points lost</span></div>
+          <details className="axis-evidence">
+            <summary>Photo evidence</summary>
+            <p>{row.evidence}</p>
+          </details>
         </section>
       ))}
     </div>
@@ -225,7 +231,7 @@ export function AnalysisWorkbench({
           </div>
           <span className="comparison-label">{song.id === recommendation.winnerId ? "Comparing the winner" : "Comparing an alternative"}</span>
         </div>
-        <p className="comparison-guide">Ember circles show the photo. Sage diamonds show the song. A smaller gap is a closer fit.</p>
+        <p className="comparison-guide">White bars show the photo. Green bars show the song. Both use the same 0–10 scale. A smaller gap is a closer fit.</p>
         <PreciseComparison rows={rows} />
         {children}
       </section>

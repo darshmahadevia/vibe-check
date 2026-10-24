@@ -89,10 +89,10 @@ try {
   await page.waitForFunction((before) => document.querySelector(".photo-preview img")?.getAttribute("src") !== before, beforeLinkedImage);
   record(true, "An image wrapped in a link imports the image rather than its destination page");
   await dropAt(await pointFor(".intro"), "Dropping a file on the hero selects the photo");
-  await dropAt(await pointFor(".sleeve-stage"), "Dropping on the CD replaces the photo");
+  await dropAt(await pointFor(".sleeve-stage"), "Dropping on the gallery replaces the photo");
   await dropAt({ x: 5, y: 300 }, "Dropping in the page gutter selects the photo");
   await dropAt(await pointFor(".actions .secondary:first-child"), "Dropping over an upload button selects the photo once");
-  record(await page.locator(".sleeve-trigger").count() === 1, "Repeated drops retain exactly one photo CD");
+  record(await page.locator(".artwork-choice").count() === 1, "Repeated drops retain exactly one photo selector");
   const panel = await pointFor(".photo-section");
   await drag("dragEnter", panel);
   await drag("dragOver", panel);

@@ -27,7 +27,7 @@ const fixture = {
   }),
 };
 try {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce", hasTouch: true });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -65,7 +65,7 @@ try {
   }
   const select = (id) => page.getByRole("checkbox", { name: `Select Song ${id} by Artist ${id} for queue`, exact: true });
   const batch = () => page.getByRole("button", { name: /^(Connect & add selected|Add selected) \(/ });
-  const queued = page.locator('.sleeve-trigger[data-disc-kind="queued"]');
+  const queued = page.locator('.artwork-choice:not(:first-child)');
   await page.goto(target, { waitUntil: "networkidle" });
   const photo = { name: "moment.png", mimeType: "image/png", buffer: Buffer.from(await page.evaluate(() => {
     const canvas = document.createElement("canvas"); canvas.width = 300; canvas.height = 200;
@@ -92,14 +92,31 @@ try {
   record(requested.length === 2 && await queued.count() === 1, "First failure stops batch after confirmed successes");
   record(!await select(1).isChecked() && await select(2).isChecked() && await select(3).isChecked(), "Failed and remaining songs stay selected");
   record(await batch().innerText() === "Add selected (2)", "Selection count excludes confirmed song");
-  await page.locator('.artwork-queued img').waitFor();
-  const coverImage = page.locator('.artwork-queued img');
+  await page.locator('.artwork-thumbnail .queued-artwork img').waitFor();
+  const coverImage = page.locator('.artwork-thumbnail .queued-artwork img');
   record(await coverImage.getAttribute("src") === cover, "Confirmed CD carries Spotify album art");
   record(await coverImage.evaluate(async (image) => {
     await image.decode();
     const bounds = image.getBoundingClientRect();
     return image.naturalWidth > 0 && image.naturalHeight > 0 && bounds.width > 0 && bounds.height > 0;
   }), "Confirmed album image decodes and renders with positive dimensions");
+  await queued.first().click();
+  await page.mouse.move(0, 0);
+  record(await queued.first().getAttribute("aria-pressed") === "true", "Album selection persists after the pointer leaves");
+  const fullCover = page.locator(`.sleeve-stage img[src="${cover}"]`).first();
+  await fullCover.scrollIntoViewIfNeeded();
+  record(await fullCover.evaluate((image) => {
+    const bounds = image.getBoundingClientRect();
+    return bounds.width >= 200 && bounds.height >= 200 &&
+      getComputedStyle(image).objectFit === "contain" &&
+      document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2) === image;
+  }), "Selected album is large, uncropped, and unobscured");
+  await page.locator('.artwork-choice[aria-label="View your photo"]').focus();
+  await page.keyboard.press("Enter");
+  record(await page.locator('.artwork-choice[aria-label="View your photo"]').getAttribute("aria-pressed") === "true", "Keyboard returns to the photo");
+  await queued.first().focus();
+  await page.keyboard.press("Enter");
+  record(await queued.first().getAttribute("aria-pressed") === "true", "Keyboard selects the album independently of comparison");
   await page.locator(".workbench").screenshot({ path: process.env.VIBE_ALBUM_SCREENSHOT || "/tmp/vibe-album-cds.png", style: "nextjs-portal { display:none!important; }" });
   await batch().click(); await respond(204); await respond(401);
   await batch().waitFor();
@@ -110,8 +127,21 @@ try {
   record(requested.length === beforeConnect && await select(3).isChecked(), "Header reconnect preserves selection and never queues winner");
   await batch().click(); await respond(204); await batch().waitFor();
   record(await queued.count() === 3, "Three distinct confirmations create three CDs");
-  await page.waitForFunction(() => [...document.querySelectorAll('.artwork-queued strong')].some((node) => node.textContent === "Song 3"));
-  record(await page.locator('.artwork-queued strong').count() === 2, "Absent and failed artwork fall back to track lettering");
+  await queued.nth(1).click();
+  record(await page.locator('.artwork-display .artwork-fallback strong').innerText() === "Song 2", "Absent artwork falls back to track lettering");
+  await queued.nth(2).click();
+  await page.locator('.artwork-display .artwork-fallback strong').waitFor();
+  record(await page.locator('.artwork-display .artwork-fallback strong').innerText() === "Song 3", "Failed artwork falls back to track lettering");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await queued.first().tap();
+  record(await queued.first().getAttribute("aria-pressed") === "true", "Tapping a cover selects the album on mobile");
+  const mobileCover = page.locator('.artwork-display img');
+  await mobileCover.scrollIntoViewIfNeeded();
+  record(await mobileCover.evaluate((image) => {
+    const bounds = image.getBoundingClientRect();
+    return bounds.width >= 200 && bounds.right <= innerWidth && bounds.left >= 0 && getComputedStyle(image).objectFit === "contain";
+  }), "Mobile selection displays the complete album within the viewport");
+  await page.setViewportSize({ width: 1280, height: 900 });
   record(await select(1).isDisabled() && await select(2).isDisabled() && await select(3).isDisabled(), "Confirmed tracks cannot be selected again");
   await select(4).check(); await select(5).check(); await batch().click();
   const stale = await nextQueue();
@@ -119,7 +149,7 @@ try {
   await page.getByRole("button", { name: "Try another photo", exact: true }).click();
   await stale.fulfill({ status: 204, body: "" });
   await page.waitForTimeout(150);
-  record(requested.length === beforeStale && await page.locator('.sleeve-trigger').count() === 0, "Reset stops batch remainder and rejects stale CD confirmation");
+  record(requested.length === beforeStale && await page.locator('.artwork-choice').count() === 0, "Reset stops batch remainder and rejects stale CD confirmation");
   fixture.requestId = "automatic-fixture";
   await find();
   const automatic = await nextQueue();

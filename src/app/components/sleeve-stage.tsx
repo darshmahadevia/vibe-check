@@ -1,14 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type PointerEvent } from "react";
-import {
-  AnimatePresence,
-  motion,
-  useMotionValue,
-  useReducedMotion,
-  useSpring,
-} from "motion/react";
+import { useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import type { Resolution } from "@/lib/mood";
 
 export type QueuedSong = Pick<
@@ -20,27 +14,29 @@ type StageDisc =
   | { kind: "photo"; id: string; preview: string }
   | ({ kind: "queued" } & QueuedSong);
 
-type SleeveInteraction =
-  | { kind: "rest"; inspected: string | null }
-  | {
-      kind: "exploring";
-      source: "pointer" | "keyboard";
-      id: string;
-      inspected: string | null;
-    };
-
-function QueuedArtwork({ song }: { song: QueuedSong }) {
-  const [failed, setFailed] = useState(false);
+function QueuedArtwork({ song, thumbnail = false }: { song: QueuedSong; thumbnail?: boolean }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const cover = song.albumCoverUrl;
   return (
-    <span className={`sleeve-art artwork-queued${song.albumCoverUrl && !failed ? " has-cover" : ""}`}>
-      {song.albumCoverUrl && !failed ? (
-        <Image src={song.albumCoverUrl} alt="" fill unoptimized sizes="250px" onError={() => setFailed(true)} />
+    <span className="queued-artwork">
+      {cover && failedUrl !== cover ? (
+        <Image
+          src={cover}
+          alt=""
+          fill
+          unoptimized
+          sizes={thumbnail ? "80px" : "(max-width: 600px) 90vw, 440px"}
+          onError={() => setFailedUrl(cover)}
+        />
       ) : (
-        <>
-          <span className="art-edition">ADDED TO YOUR QUEUE</span>
-          <strong>{song.title}</strong>
-          <span className="art-subtitle">{song.artist}</span>
-        </>
+        <span className="artwork-fallback">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 18V5l11-2v13M9 9l11-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <ellipse cx="6" cy="18" rx="3" ry="2.5" stroke="currentColor" strokeWidth="1.5" />
+            <ellipse cx="17" cy="16" rx="3" ry="2.5" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+          {!thumbnail && <><strong>{song.title}</strong><span>{song.artist}</span></>}
+        </span>
       )}
     </span>
   );
@@ -54,168 +50,65 @@ export function SleeveStage({
   queuedSongs: QueuedSong[];
 }) {
   const reducedMotion = useReducedMotion();
-  const [interaction, setInteraction] = useState<SleeveInteraction>({
-    kind: "rest",
-    inspected: null,
-  });
-  const pointerX = useMotionValue(0);
-  const pointerY = useMotionValue(0);
-  const rotateX = useSpring(pointerX, { stiffness: 140, damping: 24, mass: 0.7 });
-  const rotateY = useSpring(pointerY, { stiffness: 140, damping: 24, mass: 0.7 });
+  const photo: StageDisc = { kind: "photo", id: `photo:${photoPreview}`, preview: photoPreview };
+  const [selectedId, setSelectedId] = useState(photo.id);
   const discs: StageDisc[] = [
+    photo,
     ...queuedSongs.map((song): StageDisc => ({ kind: "queued", ...song })),
-    { kind: "photo", id: `photo:${photoPreview}`, preview: photoPreview },
   ];
-  const activeId = interaction.kind === "exploring" ? interaction.id : null;
-  const captionId = activeId ?? interaction.inspected;
-  const inspected = discs.find((disc) => disc.id === captionId);
-  const caption =
-    inspected?.kind === "queued"
-      ? `${inspected.title} · ${inspected.artist} · Added to your queue.`
-      : inspected?.kind === "photo"
-        ? "Your moment · Your photo takes the front."
-        : queuedSongs.length > 0
-          ? "Your photo. The songs you queued."
-          : "Your photo. Your soundtrack starts here.";
-
-  function explore(id: string, source: "pointer" | "keyboard") {
-    setInteraction((previous) => ({
-      kind: "exploring",
-      source,
-      id,
-      inspected: previous.inspected,
-    }));
-  }
-
-  function stopExploring(source: "pointer" | "keyboard") {
-    setInteraction((previous) =>
-      previous.kind === "exploring" && previous.source === source
-        ? { kind: "rest", inspected: previous.inspected }
-        : previous,
-    );
-  }
-
-  function moveFan(event: PointerEvent<HTMLElement>) {
-    if (
-      reducedMotion ||
-      event.pointerType === "touch" ||
-      !window.matchMedia("(hover: hover) and (pointer: fine)").matches
-    ) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const x = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.5) * 2));
-    const y = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - 0.5) * 2));
-    pointerX.set(-y * 4);
-    pointerY.set(x * 4);
-  }
+  const selected = discs.find((disc) => disc.id === selectedId) ?? photo;
 
   return (
-    <motion.figure
-      className="sleeve-stage"
-      data-has-queued={queuedSongs.length > 0}
-      initial={{ opacity: 0, filter: reducedMotion ? "none" : "blur(6px)" }}
-      animate={{ opacity: 1, filter: "blur(0px)" }}
-      transition={{ duration: reducedMotion ? 0.15 : 0.55 }}
-      onPointerMove={moveFan}
-      onPointerLeave={() => {
-        pointerX.set(0);
-        pointerY.set(0);
-        stopExploring("pointer");
-      }}
-    >
-      <div className="stage-light" aria-hidden="true" />
-      <div className="sleeve-canvas">
+    <section className="sleeve-stage" aria-label="Your photo and queued songs">
+      <figure className="selected-artwork">
         <motion.div
-          className="sleeve-fan"
-          initial={false}
-          animate={{ x: queuedSongs.length > 0 ? 0 : 100, y: queuedSongs.length > 0 ? 0 : -55 }}
-          transition={{ duration: reducedMotion ? 0 : 0.6, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            rotateX: reducedMotion ? 0 : rotateX,
-            rotateY: reducedMotion ? 0 : rotateY,
-          }}
+          className="artwork-display"
+          key={selected.id}
+          initial={{ opacity: reducedMotion ? 1 : 0.65 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: reducedMotion ? 0 : 0.18 }}
+          aria-hidden="true"
         >
-          <div className="sleeve-floor" aria-hidden="true" />
-          <AnimatePresence initial={false}>
-            {discs.map((disc, index) => {
-              const active = activeId === disc.id;
-              const position = queuedSongs.length <= 1 ? 0 : index / (queuedSongs.length - 1);
-              const isPhoto = disc.kind === "photo";
-              return (
-                <motion.div
-                  className={`sleeve-slot${isPhoto ? " front-slot" : ""}`}
-                  key={disc.id}
-                  data-disc-kind={disc.kind}
-                  layout={reducedMotion ? false : "position"}
-                  initial={isPhoto || reducedMotion ? { opacity: 0 } : { x: -36, y: 35, opacity: 0 }}
-                  animate={{
-                    x: 0,
-                    y: 0,
-                    opacity: 1,
-                    left: isPhoto ? 45 : 112 + 164 * position,
-                    top: isPhoto ? 173 : 119 - 95 * position,
-                    rotateX: 8,
-                    rotateY: -24,
-                    rotateZ: isPhoto ? -16 : -25 + 12 * position,
-                  }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: reducedMotion ? 0 : 0.65, opacity: { duration: reducedMotion ? 0.15 : 0.65 }, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ zIndex: active ? 12 : isPhoto ? 10 : queuedSongs.length - index }}
-                >
-                  <button
-                    type="button"
-                    className="sleeve-trigger"
-                    data-disc-kind={disc.kind}
-                    aria-label={isPhoto ? "Inspect your photo sleeve" : `Inspect ${disc.title} by ${disc.artist}, added to your queue`}
-                    aria-pressed={interaction.inspected === disc.id}
-                    data-active={active}
-                    onPointerEnter={(event) => {
-                      if (event.pointerType !== "touch" && window.matchMedia("(hover: hover) and (pointer: fine)").matches)
-                        explore(disc.id, "pointer");
-                    }}
-                    onPointerLeave={() => stopExploring("pointer")}
-                    onFocus={(event) => {
-                      if (event.currentTarget.matches(":focus-visible")) explore(disc.id, "keyboard");
-                    }}
-                    onBlur={() => stopExploring("keyboard")}
-                    onClick={() => setInteraction((previous) => ({ ...previous, inspected: disc.id }))}
-                  >
-                    <motion.span
-                      className="sleeve-lift"
-                      animate={{
-                        y: active && !reducedMotion ? -52 : 0,
-                        rotateZ: active && !reducedMotion ? 6 : 0,
-                        z: active && !reducedMotion ? 32 : 0,
-                      }}
-                      transition={{ duration: reducedMotion ? 0 : 0.28, ease: [0.16, 1, 0.3, 1] }}
-                    >
-                      <span className={`sleeve-case${isPhoto ? " front-case" : ""}`} aria-hidden="true">
-                        {disc.kind === "photo" ? (
-                          <span className="sleeve-art artwork-front">
-                            <span className="sleeve-photo">
-                              <Image src={disc.preview} alt="" fill unoptimized sizes="280px" />
-                            </span>
-                            <span className="front-lettering has-photo">
-                              <span className="art-edition">VIBE CHECK / YOUR MOMENT</span>
-                              <strong>THIS FEELS LIKE YOU.</strong>
-                              <span className="art-subtitle">A soundtrack waiting to happen.</span>
-                            </span>
-                          </span>
-                        ) : (
-                          <QueuedArtwork song={disc} />
-                        )}
-                      </span>
-                    </motion.span>
-                  </button>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
+          {selected.kind === "photo" ? (
+            <Image src={selected.preview} alt="" fill unoptimized sizes="(max-width: 600px) 90vw, 440px" />
+          ) : (
+            <QueuedArtwork song={selected} />
+          )}
         </motion.div>
+        <figcaption className="artwork-caption" aria-live="polite" aria-atomic="true">
+          <div>
+            <strong>{selected.kind === "photo" ? "Your moment" : selected.title}</strong>
+            <span>{selected.kind === "photo" ? "Your photo. Your soundtrack starts here." : selected.artist}</span>
+          </div>
+          {selected.kind === "queued" && <span className="artwork-status">Added to your queue</span>}
+        </figcaption>
+      </figure>
+      <div className="artwork-library">
+        <p>{queuedSongs.length ? "Your photo. The songs you queued." : "Your photo. A soundtrack waiting to happen."}</p>
+        <div className="artwork-selector" role="group" aria-label="Choose artwork to view">
+          {discs.map((disc) => (
+            <button
+              key={disc.id}
+              type="button"
+              className="artwork-choice"
+              aria-label={disc.kind === "photo" ? "View your photo" : `View ${disc.title} by ${disc.artist}, added to your queue`}
+              aria-pressed={selected.id === disc.id}
+              onClick={() => setSelectedId(disc.id)}
+            >
+              <span className="artwork-thumbnail" aria-hidden="true">
+                {disc.kind === "photo" ? (
+                  <Image src={disc.preview} alt="" fill unoptimized sizes="80px" />
+                ) : (
+                  <QueuedArtwork song={disc} thumbnail />
+                )}
+              </span>
+              <span className="artwork-choice-title">{disc.kind === "photo" ? "Your moment" : disc.title}</span>
+              <span className="artwork-choice-detail">{disc.kind === "photo" ? "Your photo" : disc.artist}</span>
+            </button>
+          ))}
+        </div>
+        {queuedSongs.length > 0 && <small>Choose a cover to see it in full.</small>}
       </div>
-      <figcaption>
-        <span className="sleeve-caption" aria-live="polite">{caption}</span>
-        <small>Hover to explore. Tap a sleeve to inspect.</small>
-      </figcaption>
-    </motion.figure>
+    </section>
   );
 }

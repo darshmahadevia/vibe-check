@@ -24,4 +24,4 @@ Camera file input and upload share browser JPEG conversion at a maximum of 768 p
 
 ## Brand commitments
 
-The name is Vibe Check. The user requests a polished dark music workbench with dimensional sleeves, warm ember accents, and purposeful motion.
+The name is Vibe Check. The user requests a polished music workbench with a pitch-black background, Spotify-inspired dark surfaces and green accents, white text, and readable neutral gray text. Photo and confirmed queued album covers stay fully visible through a persistent thumbnail selector. Mood comparisons use plainly labeled photo and song bars on the same scale. Purposeful motion respects reduced-motion preferences.

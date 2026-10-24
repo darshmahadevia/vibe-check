@@ -61,7 +61,7 @@ const { chromium } = await import(
     console.log(JSON.stringify(await page.evaluate(smoke)));
     await waitForPlayer();
     await page.locator(".results").screenshot({ ...captureOptions, path: path.join(directory, "mobile-results-collapsed.png") });
-    await page.locator("details").evaluate((element) => { element.open = true; });
+    await page.locator(".analysis-detail").evaluate((element) => { element.open = true; });
     await waitForPlayer();
     await page.locator(".results").screenshot({ ...captureOptions, path: path.join(directory, "mobile-results.png") });
     await page.emulateMedia({ reducedMotion: "reduce" });
