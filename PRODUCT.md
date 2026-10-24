@@ -24,4 +24,4 @@ Camera file input and upload share browser JPEG conversion at a maximum of 768 p
 
 ## Brand commitments
 
-The name is Vibe Check. The user requests the functional base before improvements. The user chose a minimal layout and deferred visual improvements.
+The name is Vibe Check. The user requests a polished dark music workbench with dimensional sleeves, warm ember accents, and purposeful motion.

@@ -5,9 +5,14 @@ import { z } from "zod";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  PARAMS,
-  PARAM_ENDS,
-  PARAM_LABELS,
+  AnimatePresence,
+  MotionConfig,
+  motion,
+  useReducedMotion,
+} from "motion/react";
+import { SleeveStage, type QueuedSong } from "./components/sleeve-stage";
+import { AnalysisWorkbench } from "./components/analysis-workbench";
+import {
   recommendationSchema,
   type RankedCandidate,
   type Recommendation,
@@ -20,56 +25,27 @@ import {
   isSpotifyConnected,
 } from "@/lib/browser/spotify";
 
-type PhotoState =
+export type PhotoState =
   | { kind: "empty" }
   | { kind: "preparing" }
   | { kind: "ready"; photo: PreparedPhoto };
-type ResultState =
+export type ResultState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; result: Recommendation };
 type QueueState =
-  | { kind: "adding" }
+  | { kind: "adding"; confirmed: boolean }
   | { kind: "added" }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; confirmed: boolean };
+function hasQueueConfirmation(state: QueueState | undefined): boolean {
+  if (!state) return false;
+  return state.kind === "added" || state.confirmed;
+}
 const errorSchema = z.object({ error: z.object({ message: z.string() }) });
 
-function Comparison({
-  result,
-  song,
-}: {
-  result: Recommendation;
-  song: RankedCandidate;
-}) {
-  return (
-    <div className="comparison-wrap">
-      <table>
-        <caption>Photo vs. {song.title}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Parameter</th>
-            <th scope="col">Photo</th>
-            <th scope="col">Song</th>
-            <th scope="col">Gap</th>
-          </tr>
-        </thead>
-        <tbody>
-          {PARAMS.map((p) => (
-            <tr key={p}>
-              <th scope="row">{PARAM_LABELS[p]}</th>
-              <td>{result.photo_profile[p].score}</td>
-              <td>{song.profile[p]}</td>
-              <td>{song.gaps[p]}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export default function Home() {
+  const reducedMotion = useReducedMotion();
   const [photo, setPhoto] = useState<PhotoState>({ kind: "empty" });
   const [result, setResult] = useState<ResultState>({ kind: "idle" });
   const [inputError, setInputError] = useState("");
@@ -145,7 +121,10 @@ export default function Home() {
       return;
     if (automatic) automaticAttempts.current.add(recommendation.requestId);
     queueLocks.current.add(key);
-    setQueues((previous) => ({ ...previous, [key]: { kind: "adding" } }));
+    setQueues((previous) => ({
+      ...previous,
+      [key]: { kind: "adding", confirmed: hasQueueConfirmation(previous[key]) },
+    }));
     try {
       await addToQueue(song.resolution.uri);
       setQueues((previous) => ({ ...previous, [key]: { kind: "added" } }));
@@ -154,6 +133,7 @@ export default function Home() {
         ...previous,
         [key]: {
           kind: "error",
+          confirmed: hasQueueConfirmation(previous[key]),
           message:
             error instanceof Error
               ? error.message
@@ -260,6 +240,21 @@ export default function Home() {
     upload.current?.focus();
   }
   const recommendation = result.kind === "ready" ? result.result : null;
+  const queuedSongs: QueuedSong[] = Array.from(
+    new Map(
+      recommendation?.candidates.flatMap((song) => {
+        const id = `${recommendation.requestId}:${song.id}`;
+        return song.resolution.kind === "verified" && hasQueueConfirmation(queues[id])
+          ? [
+              [
+                id,
+                { id, title: song.resolution.title, artist: song.resolution.artist },
+              ] satisfies [string, QueuedSong],
+            ]
+          : [];
+      }),
+    ).values(),
+  );
   const winner = recommendation?.candidates.find(
     (c) => c.id === recommendation.winnerId,
   );
@@ -275,364 +270,449 @@ export default function Home() {
       : undefined;
 
   return (
-    <main>
-      <header>
-        <Link href="/" className="wordmark">
-          Vibe Check
-        </Link>
-        <div className="connection">
-          <button
-            className="secondary"
-            onClick={
-              connection === "connected"
-                ? () => {
-                    disconnectSpotify();
-                    setConnection("disconnected");
-                  }
-                : () => connect()
-            }
-            disabled={connection === "connecting"}
-          >
-            {connection === "connecting"
-              ? "Connecting…"
-              : connection === "connected"
-                ? "Disconnect Spotify"
-                : "Connect Spotify"}
-          </button>
-          <small>
-            {connection === "connected"
-              ? "Connected for queueing"
-              : "No login needed to find a song"}
-          </small>
-        </div>
-      </header>
-      {connectionError && (
-        <p role="alert" className="error">
-          {connectionError}
-        </p>
-      )}
-      <section className="intro">
-        <h1>Find the song for this moment.</h1>
-        <p>
-          Take or upload a photo. Gemma 4 reads the mood. We match the songs and
-          show the math.
-        </p>
-      </section>
-      <section
-        aria-label="Choose a photo"
-        className="photo-section"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={(event) => {
-          event.preventDefault();
-          void choosePhoto(event.dataTransfer.files[0]);
-        }}
-      >
-        <input
-          ref={camera}
-          className="file-input"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          aria-label="Take a photo"
-          onChange={(event) => {
-            void choosePhoto(event.target.files?.[0]);
-            event.target.value = "";
-          }}
-        />
-        <input
-          ref={upload}
-          className="file-input"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          aria-label="Upload a photo"
-          onChange={(event) => {
-            void choosePhoto(event.target.files?.[0]);
-            event.target.value = "";
-          }}
-        />
-        {photo.kind === "ready" ? (
-          <div className="photo-preview">
-            <Image
-              unoptimized
-              src={photo.photo.preview}
-              width={photo.photo.width}
-              height={photo.photo.height}
-              alt="Your selected photo"
-            />
+    <MotionConfig reducedMotion="user" transition={{ duration: 0.22 }}>
+      <main>
+        <header className="site-header">
+          <Link href="/" className="wordmark">
+            <svg
+              className="brand-mark"
+              width="26"
+              height="26"
+              viewBox="0 0 26 26"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M3 11v4m5-9v14m5-17v20m5-17v14m5-9v4"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+            </svg>
+            Vibe Check
+          </Link>
+          <div className="connection">
+            <button
+              className="secondary"
+              onClick={
+                connection === "connected"
+                  ? () => {
+                      disconnectSpotify();
+                      setConnection("disconnected");
+                    }
+                  : () => connect()
+              }
+              disabled={connection === "connecting"}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <path
+                  d="M6 9c4-1.5 8-1.2 12 1M7 12c3.5-1 6.5-.7 10 1M8 15c2.5-.6 5-.3 8 1"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span>
+                {connection === "connecting"
+                  ? "Connecting…"
+                  : connection === "connected"
+                    ? "Disconnect Spotify"
+                    : "Connect Spotify"}
+              </span>
+            </button>
+            <small>
+              {connection === "connected"
+                ? "Connected for queueing"
+                : "No login needed to find a song"}
+            </small>
           </div>
-        ) : (
-          <div className="empty-photo">
-            <p>
-              {photo.kind === "preparing"
-                ? "Preparing your photo…"
-                : "Start with a photo"}
-            </p>
-            <span>JPEG, PNG, or WebP. You can also drop a file here.</span>
-          </div>
-        )}
-        <div className="actions">
-          <button className="secondary" onClick={() => camera.current?.click()}>
-            Take a photo
-          </button>
-          <button className="secondary" onClick={() => upload.current?.click()}>
-            Upload a photo
-          </button>
-          <button
-            onClick={findSong}
-            disabled={photo.kind !== "ready" || result.kind === "loading"}
-          >
-            {result.kind === "loading" ? "Finding your song…" : "Find my song"}
-          </button>
-        </div>
-        <p className="privacy">
-          Your photo is used once to pick songs and is never saved.
-        </p>
-        {inputError && (
+        </header>
+        {connectionError && (
           <p role="alert" className="error">
-            {inputError}
+            {connectionError}
           </p>
         )}
-      </section>
-      <div aria-live="polite" aria-atomic="true">
-        {result.kind === "loading" && (
-          <p className="loading">
-            Reading the photo, matching eight songs, and checking Spotify. This
-            can take a moment.
-          </p>
-        )}
-      </div>
-      {result.kind === "error" && (
-        <p role="alert" className="error">
-          {result.message}
-        </p>
-      )}
-      {recommendation && (
-        <section className="results" aria-label="Your song results">
-          <p className="vibe-summary">{recommendation.vibe_summary}</p>
-          {winner ? (
-            <section className="winner" aria-labelledby="winner-title">
-              <div className="winner-heading">
+        <div className="workbench" data-has-photo={photo.kind === "ready"}>
+          <motion.section layout={reducedMotion ? false : "position"} className="intro">
+            <h1>Every moment has a soundtrack.</h1>
+            <p>
+              A late night. A slow morning. A feeling you can’t quite name.
+              Start with a photo. Find the song that fits.
+            </p>
+          </motion.section>
+          {photo.kind === "ready" && (
+            <SleeveStage
+              key={photo.photo.preview}
+              photoPreview={photo.photo.preview}
+              queuedSongs={queuedSongs}
+            />
+          )}
+          <motion.section
+            layout={reducedMotion ? false : "position"}
+            aria-label="Choose a photo"
+            className="photo-section"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              void choosePhoto(event.dataTransfer.files[0]);
+            }}
+          >
+            <input
+              ref={camera}
+              className="file-input"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              aria-label="Take a photo"
+              onChange={(event) => {
+                void choosePhoto(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            <input
+              ref={upload}
+              className="file-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              aria-label="Upload a photo"
+              onChange={(event) => {
+                void choosePhoto(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            <motion.div
+              key={photo.kind}
+              className="photo-status"
+              initial={{
+                opacity: 0.4,
+                filter: reducedMotion ? "none" : "blur(4px)",
+              }}
+              animate={{ opacity: 1, filter: "blur(0px)" }}
+            >
+              {photo.kind === "ready" ? (
+                <>
+                  <div className="photo-preview">
+                    <Image
+                      unoptimized
+                      src={photo.photo.preview}
+                      width={photo.photo.width}
+                      height={photo.photo.height}
+                      alt="Your selected photo"
+                    />
+                  </div>
+                  <div className="photo-copy">
+                    <strong>Your moment, ready to play.</strong>
+                    <span>Choose a different photo anytime.</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="photo-placeholder" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <rect
+                        x="3"
+                        y="3"
+                        width="18"
+                        height="18"
+                        rx="3"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
+                      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+                      <path
+                        d="m3 17 5-5 4 4 4-6 5 7"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                  <div className="empty-photo photo-copy">
+                    <strong>
+                      {photo.kind === "preparing"
+                        ? "Preparing your photo…"
+                        : "It starts with your photo."}
+                    </strong>
+                    <span>Drop a JPEG, PNG, or WebP here.</span>
+                  </div>
+                </>
+              )}
+            </motion.div>
+            <div className="actions">
+              <button
+                className="secondary"
+                onClick={() => upload.current?.click()}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Upload a photo
+              </button>
+              <button
+                className="secondary"
+                onClick={() => camera.current?.click()}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m8 5 1-2h6l1 2h4a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4Z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="4"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+                Take a photo
+              </button>
+              <motion.button
+                className="find-song"
+                onClick={findSong}
+                disabled={photo.kind !== "ready" || result.kind === "loading"}
+                whileTap={reducedMotion ? undefined : { scale: 0.985 }}
+              >
+                {result.kind === "loading"
+                  ? "Finding your song…"
+                  : "Find my song"}
+              </motion.button>
+            </div>
+            <p className="privacy">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <rect
+                  x="5"
+                  y="10"
+                  width="14"
+                  height="11"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+                <path
+                  d="M8 10V7a4 4 0 0 1 8 0v3"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+              </svg>
+              Used once to find your songs. Never saved.
+            </p>
+            {inputError && (
+              <p role="alert" className="error">
+                {inputError}
+              </p>
+            )}
+          </motion.section>
+        </div>
+        <div aria-live="polite" aria-atomic="true">
+          <AnimatePresence initial={false} mode="wait">
+            {result.kind === "loading" && (
+              <motion.div
+                key="loading"
+                className="loading"
+                initial={{ opacity: 0.4 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <span className="loading-indicator" aria-hidden="true" />
                 <div>
-                  <h2 id="winner-title">
-                    {winner.resolution.kind === "verified"
-                      ? winner.resolution.title
-                      : winner.title}
-                  </h2>
+                  <strong>Listening to the feeling.</strong>
                   <p>
-                    {winner.resolution.kind === "verified"
-                      ? winner.resolution.artist
-                      : winner.artist}
+                    Reading your photo, matching eight songs, and checking
+                    Spotify. This can take a moment.
                   </p>
                 </div>
-                <strong>{winner.score}% match</strong>
-              </div>
-              <p>{winner.fit_note}</p>
-              {winner.resolution.kind === "verified" && (
-                <iframe
-                  title={`Spotify player for ${winner.title}`}
-                  src={`https://open.spotify.com/embed/track/${winner.resolution.trackId}`}
-                  width="100%"
-                  height="152"
-                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                  loading="lazy"
-                />
-              )}
-              <div className="queue-status" aria-live="polite">
-                {winnerQueue?.kind === "added" ? (
-                  <p>Added to your Spotify queue.</p>
-                ) : (
-                  <>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        {result.kind === "error" && (
+          <p role="alert" className="error">
+            {result.message}
+          </p>
+        )}
+        {recommendation && (
+          <motion.section
+            key={recommendation.requestId}
+            className="results"
+            aria-label="Your song results"
+            initial={{
+              opacity: 0.4,
+              y: reducedMotion ? 0 : 12,
+              filter: reducedMotion ? "none" : "blur(4px)",
+            }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: reducedMotion ? 0.15 : 0.4 }}
+          >
+            <p className="vibe-summary">{recommendation.vibe_summary}</p>
+            {winner ? (
+              <section className="winner" aria-labelledby="winner-title">
+                <div className="winner-heading">
+                  <div>
+                    <h2 id="winner-title">
+                      {winner.resolution.kind === "verified"
+                        ? winner.resolution.title
+                        : winner.title}
+                    </h2>
                     <p>
-                      {winnerQueue?.kind === "error"
-                        ? winnerQueue.message
-                        : connection === "connected"
-                          ? "Your highest-ranked verified song."
-                          : "Connect Spotify to add this to your queue."}
+                      {winner.resolution.kind === "verified"
+                        ? winner.resolution.artist
+                        : winner.artist}
                     </p>
+                  </div>
+                  <strong>{winner.score}% match</strong>
+                </div>
+                <p>{winner.fit_note}</p>
+                {winner.resolution.kind === "verified" && (
+                  <iframe
+                    title={`Spotify player for ${winner.title}`}
+                    src={`https://open.spotify.com/embed/track/${winner.resolution.trackId}`}
+                    width="100%"
+                    height="152"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"
+                  />
+                )}
+                <div className="queue-status" aria-live="polite">
+                  {winnerQueue?.kind === "added" ? (
+                    <p>Added to your Spotify queue.</p>
+                  ) : (
+                    <>
+                      <p>
+                        {winnerQueue?.kind === "error"
+                          ? winnerQueue.message
+                          : connection === "connected"
+                            ? "Your highest-ranked verified song."
+                            : "Connect Spotify to add this to your queue."}
+                      </p>
+                      <button
+                        disabled={
+                          winnerQueue?.kind === "adding" ||
+                          connection === "connecting"
+                        }
+                        onClick={() =>
+                          connection === "connected"
+                            ? queueSong(recommendation, winner)
+                            : connect(winner)
+                        }
+                      >
+                        {winnerQueue?.kind === "adding"
+                          ? "Adding to queue…"
+                          : connection === "connected"
+                            ? "Add to queue"
+                            : "Connect Spotify to add to queue"}
+                      </button>
+                    </>
+                  )}
+                </div>
+                {winner.rank > 1 && (
+                  <p className="fallback-note">
+                    #1 wasn&apos;t found on Spotify, so{" "}
+                    {winnerQueue?.kind === "added"
+                      ? "we queued"
+                      : "we selected"}{" "}
+                    #{winner.rank}.
+                  </p>
+                )}
+              </section>
+            ) : (
+              <div className="notice">
+                <h2>No verified Spotify match</h2>
+                <p>
+                  We couldn&apos;t verify these songs on Spotify. Your ranked
+                  suggestions are below. Use their search links to find them.
+                  Nothing was queued.
+                </p>
+              </div>
+            )}
+            <AnalysisWorkbench
+              recommendation={recommendation}
+              selectedId={selected}
+              onSelect={setSelected}
+              detailsRef={details}
+            >
+              {comparison &&
+                comparison.id !== recommendation.winnerId &&
+                comparison.resolution.kind === "verified" && (
+                  <div className="comparison-queue">
                     <button
-                      disabled={
-                        winnerQueue?.kind === "adding" ||
-                        connection === "connecting"
-                      }
+                      disabled={comparisonQueue?.kind === "adding"}
                       onClick={() =>
                         connection === "connected"
-                          ? queueSong(recommendation, winner)
-                          : connect(winner)
+                          ? queueSong(recommendation, comparison)
+                          : connect(comparison)
                       }
                     >
-                      {winnerQueue?.kind === "adding"
-                        ? "Adding to queue…"
-                        : connection === "connected"
-                          ? "Add to queue"
-                          : "Connect Spotify to add to queue"}
+                      {connection === "connected"
+                        ? "Add to queue instead"
+                        : "Connect Spotify to queue songs"}
                     </button>
-                  </>
+                    <p aria-live="polite">
+                      {comparisonQueue?.kind === "added"
+                        ? "Added to your Spotify queue."
+                        : comparisonQueue?.kind === "error"
+                          ? comparisonQueue.message
+                          : ""}
+                    </p>
+                  </div>
                 )}
-              </div>
-              {winner.rank > 1 && (
-                <p className="fallback-note">
-                  #1 wasn&apos;t found on Spotify, so{" "}
-                  {winnerQueue?.kind === "added" ? "we queued" : "we selected"}{" "}
-                  #{winner.rank}.
-                </p>
-              )}
-            </section>
-          ) : (
-            <div className="notice">
-              <h2>No verified Spotify match</h2>
-              <p>
-                We couldn&apos;t verify these songs on Spotify. Your ranked
-                suggestions are below. Use their search links to find them.
-                Nothing was queued.
-              </p>
-            </div>
-          )}
-          <details ref={details} open>
-            <summary>How we decided</summary>
-            <div className="breakdown">
-              <section>
-                <h3>The photo&apos;s mood</h3>
-                <div className="mood-grid">
-                  {PARAMS.map((p) => (
-                    <div className="mood-row" key={p}>
-                      <div className="bar-label">
-                        <strong>{PARAM_LABELS[p]}</strong>
-                        <span>
-                          {recommendation.photo_profile[p].score} / 10
-                        </span>
-                      </div>
-                      <meter
-                        min={0}
-                        max={10}
-                        value={recommendation.photo_profile[p].score}
-                        aria-label={`${PARAM_LABELS[p]} photo score`}
-                      />
-                      <div className="bar-ends">
-                        <span>{PARAM_ENDS[p][0]}</span>
-                        <span>{PARAM_ENDS[p][1]}</span>
-                      </div>
-                      <p>{recommendation.photo_profile[p].evidence}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              <section>
-                <h3>What mattered most</h3>
-                <p>{recommendation.weights_reason}</p>
-                <div className="weights">
-                  {PARAMS.map((p) => (
-                    <div className="weight-row" key={p}>
-                      <span>{PARAM_LABELS[p]}</span>
-                      <div className="weight-track">
-                        <span
-                          style={{
-                            width: `${recommendation.weights[p] * 100}%`,
-                          }}
-                        />
-                      </div>
-                      <span>
-                        {(recommendation.weights[p] * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <p className="formula">
-                  Match = round(100 × (1 − weighted average gap ÷ 10)). Higher
-                  is closer. Ties favor verified songs, then the smallest worst
-                  gap.
-                </p>
-              </section>
-              <section>
-                <h3>All eight candidates</h3>
-                <p>Select a song to compare its parameters with the photo.</p>
-                <ol className="candidates">
-                  {recommendation.candidates.map((song) => (
-                    <li key={song.id}>
-                      <button
-                        className="candidate"
-                        aria-pressed={selected === song.id}
-                        onClick={() => setSelected(song.id)}
-                      >
-                        <span className="rank">{song.rank}</span>
-                        <span className="song-name">
-                          <strong>{song.title}</strong>
-                          <span>{song.artist}</span>
-                          <small>
-                            {song.resolution.kind === "verified"
-                              ? "Verified on Spotify"
-                              : "Not verified"}
-                            {song.id === recommendation.winnerId
-                              ? " · Selected song"
-                              : ""}
-                          </small>
-                        </span>
-                        <strong>{song.score}%</strong>
-                      </button>
-                      <a
-                        className="spotify-link"
-                        href={song.resolution.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Open in Spotify
-                      </a>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-              {comparison && (
-                <section className="selected-comparison">
-                  <h3>
-                    {comparison.id === recommendation.winnerId
-                      ? "The winner, parameter by parameter"
-                      : `Compare ${comparison.title}`}
-                  </h3>
-                  <p>{comparison.fit_note}</p>
-                  <Comparison result={recommendation} song={comparison} />
-                  {comparison.id !== recommendation.winnerId &&
-                    comparison.resolution.kind === "verified" && (
-                      <>
-                        <button
-                          disabled={comparisonQueue?.kind === "adding"}
-                          onClick={() =>
-                            connection === "connected"
-                              ? queueSong(recommendation, comparison)
-                              : connect(comparison)
-                          }
-                        >
-                          {connection === "connected"
-                            ? "Add to queue instead"
-                            : "Connect Spotify to queue songs"}
-                        </button>
-                        <p aria-live="polite">
-                          {comparisonQueue?.kind === "added"
-                            ? "Added to your Spotify queue."
-                            : comparisonQueue?.kind === "error"
-                              ? comparisonQueue.message
-                              : ""}
-                        </p>
-                      </>
-                    )}
-                </section>
-              )}
-            </div>
-          </details>
-          <p className="disclaimer">
-            Song scores are Gemma 4&apos;s estimates of how each song sounds,
-            not measured audio data.
-          </p>
-          <button className="secondary" onClick={reset}>
-            Try another photo
-          </button>
-        </section>
-      )}
-      <footer>
-        <span>Gemma reads the mood. Code makes the match.</span>
-        <span>
-          Queue mode needs Spotify Premium and an allowlisted account.
-          Connecting enables automatic queueing.
-        </span>
-      </footer>
-    </main>
+            </AnalysisWorkbench>
+            <p className="disclaimer">
+              Song scores are Gemma 4&apos;s estimates of how each song sounds,
+              not measured audio data.
+            </p>
+            <button className="secondary" onClick={reset}>
+              Try another photo
+            </button>
+          </motion.section>
+        )}
+        <footer>
+          <span>Gemma reads the mood. Code makes the match.</span>
+          <span>
+            Queue mode needs Spotify Premium and an allowlisted account.
+            Connecting enables automatic queueing.
+          </span>
+        </footer>
+      </main>
+    </MotionConfig>
   );
 }
