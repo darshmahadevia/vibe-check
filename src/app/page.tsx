@@ -44,6 +44,9 @@ export type QueueState =
   | { kind: "adding"; confirmed: boolean }
   | { kind: "added" }
   | { kind: "error"; message: string; confirmed: boolean };
+type SpotifyNotification =
+  | { kind: "success"; message: string }
+  | { kind: "error"; message: string };
 function hasQueueConfirmation(state: QueueState | undefined): boolean {
   if (!state) return false;
   return state.kind === "added" || state.confirmed;
@@ -60,7 +63,7 @@ export default function Home() {
   const [connection, setConnection] = useState<
     "disconnected" | "connecting" | "connected"
   >("disconnected");
-  const [connectionError, setConnectionError] = useState("");
+  const [notification, setNotification] = useState<SpotifyNotification | null>(null);
   const [queues, setQueues] = useState<Record<string, QueueState>>({});
   const [batchSelection, setBatchSelection] = useState<Set<number>>(new Set());
   const [batchAdding, setBatchAdding] = useState(false);
@@ -69,6 +72,7 @@ export default function Home() {
   const confirmedQueues = useRef(new Set<string>());
   const [selected, setSelected] = useState<number | null>(null);
   const upload = useRef<HTMLInputElement>(null);
+  const uploadButton = useRef<HTMLButtonElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const previewUrl = useRef<string | null>(null);
   const generation = useRef(0);
@@ -200,7 +204,10 @@ export default function Home() {
               : "Couldn't add this song. Please try again.",
         },
       }));
-      if (!isSpotifyConnected()) setConnection("disconnected");
+      if (!isSpotifyConnected()) {
+        setConnection("disconnected");
+        setNotification(null);
+      }
       return false;
     } finally {
       queueLocks.current.delete(key);
@@ -211,10 +218,11 @@ export default function Home() {
     const pendingGeneration = generation.current;
     const pendingRequestId = resultRef.current?.requestId;
     setConnection("connecting");
-    setConnectionError("");
+    setNotification(null);
     try {
       await connectSpotify();
       setConnection("connected");
+      setNotification({ kind: "success", message: "Signed in to Spotify" });
       const current = resultRef.current;
       if (pendingGeneration !== generation.current) return;
       if (queueTarget && current?.requestId !== pendingRequestId) return;
@@ -224,11 +232,12 @@ export default function Home() {
       return true;
     } catch (error) {
       setConnection("disconnected");
-      setConnectionError(
-        error instanceof Error
+      setNotification({
+        kind: "error",
+        message: error instanceof Error
           ? error.message
           : "Couldn't connect. Please try again.",
-      );
+      });
     }
   }
   async function queueSelected() {
@@ -320,7 +329,8 @@ export default function Home() {
     setSelected(null);
     setBatchSelection(new Set());
     setQueues({});
-    upload.current?.focus();
+    setNotification(null);
+    uploadButton.current?.focus();
   }
   const recommendation = result.kind === "ready" ? result.result : null;
   const queuedSongs: QueuedSong[] = Array.from(
@@ -392,32 +402,20 @@ export default function Home() {
         )}
       <main>
         <header className="site-header">
-          <Link href="/" className="wordmark">
-            <svg
-              className="brand-mark"
-              width="26"
-              height="26"
-              viewBox="0 0 26 26"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M3 11v4m5-9v14m5-17v20m5-17v14m5-9v4"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-            </svg>
+          <Link href="/" className="wordmark" onNavigate={reset}>
             Vibe Check
           </Link>
-          <div className="connection">
+          <nav className="header-actions" aria-label="Main navigation">
+            {photo.kind !== "empty" && (
+              <button className="new-photo" onClick={reset}>New photo</button>
+            )}
             <button
-              className="secondary"
               onClick={
                 connection === "connected"
                   ? () => {
                       disconnectSpotify();
                       setConnection("disconnected");
+                      setNotification(null);
                     }
                   : () => connect()
               }
@@ -452,28 +450,30 @@ export default function Home() {
                     : "Connect Spotify"}
               </span>
             </button>
-            <small>
-              {connection === "connected"
-                ? "Connected for queueing"
-                : "No login needed to find a song"}
-            </small>
-          </div>
+          </nav>
+          {notification && (
+            <div className="spotify-notification" data-kind={notification.kind}>
+              <p
+                role={notification.kind === "error" ? "alert" : "status"}
+                aria-live={notification.kind === "error" ? "assertive" : "polite"}
+                aria-atomic="true"
+              >
+                {notification.message}
+              </p>
+              <button className="notification-dismiss" aria-label="Dismiss notification" onClick={() => setNotification(null)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          )}
         </header>
-        {connectionError && (
-          <p role="alert" className="error">
-            {connectionError}
-          </p>
-        )}
         <div className="workbench" data-has-photo={photo.kind === "ready"}>
           <motion.section layout={reducedMotion ? false : "position"} className="intro">
             <h1>
               <span className="headline-line">Every moment has</span>{" "}
               <span className="headline-line">a <span className="headline-accent">soundtrack.</span></span>
             </h1>
-            <p>
-              <span>A late night. A slow morning. A feeling you can’t quite name.</span>{" "}
-              <span>Start with a photo. Find the song that fits.</span>
-            </p>
           </motion.section>
           {photo.kind === "ready" && (
             <SleeveStage
@@ -534,38 +534,15 @@ export default function Home() {
                   </div>
                   <div className="photo-copy" role="status">
                     <strong>Your moment, ready to play.</strong>
-                    <span>Choose a different photo anytime.</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="photo-placeholder" aria-hidden="true">
-                    <svg width="224" height="88" viewBox="0 0 224 88" fill="none">
-                      <path
-                        className="photo-wave-outer"
-                        d="M12 41v6m12-16v26m12-35v44m12-38v32m12-43v54m104-54v54m12-43v32m12-38v44m12-35v26m12-16v6"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                      />
-                      <rect
-                        x="78"
-                        y="10"
-                        width="68"
-                        height="68"
-                        rx="12"
-                        fill="var(--surface-raised)"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                      />
-                      <circle cx="99" cy="31" r="5" fill="currentColor" />
-                      <path
-                        d="m87 63 17-18 12 11 12-18 9 12"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                      <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.8" />
+                      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+                      <path d="m3 16 5-5 4 5 4-6 5 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
                   <div className="empty-photo photo-copy" role="status">
@@ -581,7 +558,7 @@ export default function Home() {
             </motion.div>
             <div className="actions">
               <button
-                className="secondary upload-photo"
+                ref={uploadButton}
                 onClick={() => upload.current?.click()}
               >
                 <svg
@@ -602,7 +579,6 @@ export default function Home() {
                 Upload a photo
               </button>
               <button
-                className="secondary"
                 onClick={() => camera.current?.click()}
               >
                 <svg
@@ -745,13 +721,7 @@ export default function Home() {
                     <p>Added to your Spotify queue.</p>
                   ) : (
                     <>
-                      <p>
-                        {winnerQueue?.kind === "error"
-                          ? winnerQueue.message
-                          : connection === "connected"
-                            ? "Your highest-ranked verified song."
-                            : "Connect Spotify to add this to your queue."}
-                      </p>
+                      {winnerQueue?.kind === "error" && <p>{winnerQueue.message}</p>}
                       <button
                         disabled={
                           batchAdding || queuePending || winnerQueue?.kind === "adding" ||
@@ -846,13 +816,12 @@ export default function Home() {
               Song scores are Gemma 4&apos;s estimates of how each song sounds,
               not measured audio data.
             </p>
-            <button className="secondary" onClick={reset}>
+            <button onClick={reset}>
               Try another photo
             </button>
           </motion.section>
         )}
         <footer>
-          <span>Gemma reads the mood. Code makes the match.</span>
           <span>
             Queue mode needs Spotify Premium and an allowlisted account.
             Your top match queues automatically when Spotify is connected.

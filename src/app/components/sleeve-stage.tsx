@@ -78,13 +78,12 @@ export function SleeveStage({
         <figcaption className="artwork-caption" aria-live="polite" aria-atomic="true">
           <div>
             <strong>{selected.kind === "photo" ? "Your moment" : selected.title}</strong>
-            <span>{selected.kind === "photo" ? "Your photo. Your soundtrack starts here." : selected.artist}</span>
+            {selected.kind === "queued" && <span>{selected.artist}</span>}
           </div>
           {selected.kind === "queued" && <span className="artwork-status">Added to your queue</span>}
         </figcaption>
       </figure>
       <div className="artwork-library">
-        <p>{queuedSongs.length ? "Your photo. The songs you queued." : "Your photo. A soundtrack waiting to happen."}</p>
         <div className="artwork-selector" role="group" aria-label="Choose artwork to view">
           {discs.map((disc) => (
             <button
@@ -107,7 +106,6 @@ export function SleeveStage({
             </button>
           ))}
         </div>
-        {queuedSongs.length > 0 && <small>Choose a cover to see it in full.</small>}
       </div>
     </section>
   );

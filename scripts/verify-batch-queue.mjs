@@ -83,6 +83,11 @@ try {
   record(await select(1).isChecked() && await select(2).isChecked() && await select(3).isChecked(), "Comparison keeps independent batch selection");
   await batch().click();
   const first = await nextQueue();
+  record(await page.getByRole("status").filter({ hasText: "Signed in to Spotify" }).count() === 1, "Connecting through queue selection shows the sign-in popup");
+  record(await page.getByRole("status").filter({ hasText: "Signed in to Spotify" }).evaluate((node) => {
+    const bounds = node.getBoundingClientRect();
+    return bounds.top >= 0 && bounds.bottom <= innerHeight;
+  }), "Queue sign-in confirmation stays visible while results are scrolled");
   record(requested[0] === fixture.candidates[1].resolution.uri, "Login resumes selected songs in rank order without adding winner");
   record(await queued.count() === 0, "Pending batch adds no song CDs");
   record(await page.getByRole("button", { name: "Select available", exact: true }).isDisabled(), "Batch locks selection and individual queue controls");
@@ -121,6 +126,7 @@ try {
   await batch().click(); await respond(204); await respond(401);
   await batch().waitFor();
   record(await select(3).isChecked() && await batch().innerText() === "Connect & add selected (1)", "Reconnect failure retains remaining selected song");
+  record(await page.getByText("Signed in to Spotify", { exact: true }).count() === 0, "Expired authorization clears the stale signed-in popup");
   const beforeConnect = requested.length;
   await page.getByRole("button", { name: "Connect Spotify", exact: true }).click();
   await page.getByRole("button", { name: "Disconnect Spotify", exact: true }).waitFor();

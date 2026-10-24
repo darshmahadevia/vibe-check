@@ -91,14 +91,14 @@ try {
   await dropAt(await pointFor(".intro"), "Dropping a file on the hero selects the photo");
   await dropAt(await pointFor(".sleeve-stage"), "Dropping on the gallery replaces the photo");
   await dropAt({ x: 5, y: 300 }, "Dropping in the page gutter selects the photo");
-  await dropAt(await pointFor(".actions .secondary:first-child"), "Dropping over an upload button selects the photo once");
+  await dropAt(await pointFor(".actions button:first-child"), "Dropping over an upload button selects the photo once");
   record(await page.locator(".artwork-choice").count() === 1, "Repeated drops retain exactly one photo selector");
   const panel = await pointFor(".photo-section");
   await drag("dragEnter", panel);
   await drag("dragOver", panel);
   await page.locator(".file-drop-feedback").getByText("Drop your photo here", { exact: true }).waitFor();
   record(true, "A native file drag displays the drop instruction");
-  await drag("dragOver", await pointFor(".actions .secondary:first-child"));
+  await drag("dragOver", await pointFor(".actions button:first-child"));
   record(await page.locator(".file-drop-feedback").isVisible(), "Drop feedback stays visible over child controls");
   await page.screenshot({ path: path.join(directory, "drag-feedback.png"), style: "nextjs-portal { display:none!important; }" });
   await page.keyboard.press("Escape");

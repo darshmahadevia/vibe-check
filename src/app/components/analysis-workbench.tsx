@@ -90,11 +90,10 @@ function CandidateRanking({
         <h3 id="ranking-title">Curate your queue</h3>
         <span>Similarity</span>
       </div>
-      <p>Select songs for Spotify. They’ll be added in ranked order. Choose a title to compare its mood.</p>
       <div className="batch-controls">
         <div className="batch-selection-actions">
-          <button className="secondary" disabled={queue.queueBusy || (!available && !retryable)} onClick={queue.onSelectAvailable}>Select available</button>
-          <button className="secondary" disabled={queue.queueBusy || !queue.queueSelection.size} onClick={queue.onClearQueue}>Clear</button>
+          <button disabled={queue.queueBusy || (!available && !retryable)} onClick={queue.onSelectAvailable}>Select available</button>
+          <button disabled={queue.queueBusy || !queue.queueSelection.size} onClick={queue.onClearQueue}>Clear</button>
         </div>
         <button disabled={queue.queueBusy || !queue.queueSelection.size} onClick={queue.onQueueSelected}>
           {queue.queueBusy ? "Preparing your queue…" : `${queue.connected ? "Add selected" : "Connect & add selected"} (${queue.queueSelection.size})`}
@@ -218,7 +217,6 @@ export function AnalysisWorkbench({
     <section className="analysis-workbench" aria-labelledby="analysis-title">
       <div className="analysis-heading">
         <h2 id="analysis-title">Inside the match</h2>
-        <p>Six mood estimates. Eight songs. A closer look at why they fit.</p>
       </div>
       <div className="analysis-overview">
         <CandidateRanking recommendation={recommendation} selectedId={selectedId} onSelect={onSelect} queue={queue} />
