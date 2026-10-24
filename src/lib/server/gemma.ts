@@ -32,9 +32,10 @@ export async function analyzePhoto(image: Uint8Array): Promise<Analysis> {
       "Photo matching isn't configured yet. Please try again later.",
       503,
     );
+  const abortSignal = AbortSignal.timeout(100_000);
   const ai = new GoogleGenAI({
     apiKey,
-    httpOptions: { timeout: 45_000, retryOptions: { attempts: 1 } },
+    httpOptions: { timeout: 100_000, retryOptions: { attempts: 1 } },
   });
   for (let attempt = 0; attempt < 2; attempt++) {
     let text: string;
@@ -43,6 +44,7 @@ export async function analyzePhoto(image: Uint8Array): Promise<Analysis> {
       const response = await ai.models.generateContent({
         model: process.env.GEMMA_MODEL || "gemma-4-26b-a4b-it",
         config: {
+          abortSignal,
           systemInstruction: SYSTEM_INSTRUCTION,
           temperature: 0.6,
           maxOutputTokens: 7000,
