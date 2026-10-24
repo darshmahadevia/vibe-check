@@ -1,9 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { GenerateContentParameters, GoogleGenAIOptions } from "@google/genai";
 vi.mock("server-only", () => ({}));
 const { generateContent } = vi.hoisted(() => ({ generateContent: vi.fn() }));
 vi.mock("@google/genai", () => ({
   GoogleGenAI: class {
-    models = { generateContent };
+    models;
+
+    constructor(options: GoogleGenAIOptions) {
+      this.models = {
+        async generateContent(params: GenerateContentParameters) {
+          const signal = params.config?.abortSignal;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          let onAbort = () => {};
+          const deadline = new Promise<never>((_, reject) => {
+            onAbort = () => reject(new DOMException("Aborted", "AbortError"));
+            if (signal?.aborted) onAbort();
+            else signal?.addEventListener("abort", onAbort, { once: true });
+            if (options.httpOptions?.timeout) {
+              timer = setTimeout(
+                () => reject({ status: 504 }),
+                options.httpOptions.timeout,
+              );
+            }
+          });
+          try {
+            return await Promise.race([generateContent(params), deadline]);
+          } finally {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", onAbort);
+          }
+        },
+      };
+    }
   },
 }));
 import { analyzePhoto, parseAnalysis } from "./gemma";
@@ -31,6 +59,72 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 describe("Gemma boundary", () => {
+  describe("generation deadline", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      // Node's native AbortSignal.timeout does not use Vitest's fake clock.
+      vi.spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), milliseconds);
+        return controller.signal;
+      });
+    });
+    afterEach(() => {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    });
+
+    it("allows a valid generation that takes sixty seconds", async () => {
+      generateContent.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(
+              () => resolve({ text: JSON.stringify(validAnalysis()) }),
+              60_000,
+            );
+          }),
+      );
+      const result = analyzePhoto(new Uint8Array([1])).then(
+        (analysis) => ({ analysis }),
+        (error: unknown) => ({ error }),
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(await result).toEqual({ analysis: validAnalysis() });
+      expect(generateContent).toHaveBeenCalledTimes(1);
+    });
+
+    it("limits generation and its invalid-output retry to one hundred seconds total", async () => {
+      generateContent
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(() => resolve({ text: "bad json" }), 60_000);
+            }),
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(
+                () => resolve({ text: JSON.stringify(validAnalysis()) }),
+                60_000,
+              );
+            }),
+        );
+      const analysis = analyzePhoto(new Uint8Array([1]));
+      const settled = vi.fn();
+      void analysis.then(settled, settled);
+      await vi.advanceTimersByTimeAsync(99_999);
+      expect(generateContent).toHaveBeenCalledTimes(2);
+      expect(settled).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toHaveBeenCalledTimes(1);
+      await expect(analysis).rejects.toMatchObject({
+        code: "model_unavailable",
+        status: 503,
+      });
+    });
+  });
   it("parses fenced JSON and defaults invalid weights", () => {
     const data = validAnalysis();
     expect(
