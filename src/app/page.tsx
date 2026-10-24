@@ -73,7 +73,6 @@ export default function Home() {
   const [selected, setSelected] = useState<number | null>(null);
   const upload = useRef<HTMLInputElement>(null);
   const uploadButton = useRef<HTMLButtonElement>(null);
-  const camera = useRef<HTMLInputElement>(null);
   const previewUrl = useRef<string | null>(null);
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -490,18 +489,6 @@ export default function Home() {
             aria-busy={photo.kind === "preparing"}
           >
             <input
-              ref={camera}
-              className="file-input"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              aria-label="Take a photo"
-              onChange={(event) => {
-                void choosePhoto(event.target.files?.[0]);
-                event.target.value = "";
-              }}
-            />
-            <input
               ref={upload}
               className="file-input"
               type="file"
@@ -551,7 +538,7 @@ export default function Home() {
                         ? "Preparing your photo…"
                         : "It starts with your photo."}
                     </strong>
-                    <span>{photo.kind === "preparing" ? "Making it ready for its soundtrack." : "Drag an image here, or choose one below."}</span>
+                    {photo.kind !== "preparing" && <span>Drag an image here, or choose one below.</span>}
                   </div>
                 </>
               )}
@@ -578,32 +565,6 @@ export default function Home() {
                 </svg>
                 Upload a photo
               </button>
-              <button
-                onClick={() => camera.current?.click()}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="m8 5 1-2h6l1 2h4a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="4"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  />
-                </svg>
-                Take a photo
-              </button>
               <motion.button
                 className="find-song"
                 onClick={findSong}
@@ -615,31 +576,6 @@ export default function Home() {
                   : "Find my song"}
               </motion.button>
             </div>
-            <p className="privacy">
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <rect
-                  x="5"
-                  y="10"
-                  width="14"
-                  height="11"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
-                <path
-                  d="M8 10V7a4 4 0 0 1 8 0v3"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
-              </svg>
-              Used once to find your songs. Never saved.
-            </p>
             {inputError && (
               <p role="alert" className="error">
                 {inputError}
@@ -812,21 +748,11 @@ export default function Home() {
                   </div>
                 )}
             </AnalysisWorkbench>
-            <p className="disclaimer">
-              Song scores are Gemma 4&apos;s estimates of how each song sounds,
-              not measured audio data.
-            </p>
             <button onClick={reset}>
               Try another photo
             </button>
           </motion.section>
         )}
-        <footer>
-          <span>
-            Queue mode needs Spotify Premium and an allowlisted account.
-            Your top match queues automatically when Spotify is connected.
-          </span>
-        </footer>
       </main>
       </div>
     </MotionConfig>

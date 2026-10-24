@@ -20,7 +20,7 @@ Vibe Check selects a song for a photo and exposes the evidence, six mood paramet
 
 ## Capabilities and constraints
 
-Camera file input and upload share browser JPEG conversion at a maximum of 768 pixels. Gemma 4 proposes eight songs in one normal call. Code ranks songs. Spotify search verifies candidates anonymously. Browser PKCE enables queueing. Photos are never stored or logged by the app. Rooms, voting, accounts, databases, playlists, history, video, native apps, and payments are excluded.
+Photo uploads use browser JPEG conversion at a maximum of 768 pixels. Gemma 4 proposes eight songs in one normal call. Code ranks songs. Spotify search verifies candidates anonymously. Browser PKCE enables queueing. Photos are never stored or logged by the app. Rooms, voting, accounts, databases, playlists, history, video, native apps, and payments are excluded.
 
 ## Brand commitments
 

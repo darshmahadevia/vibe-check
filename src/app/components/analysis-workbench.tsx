@@ -237,6 +237,7 @@ export function AnalysisWorkbench({
       <details ref={detailsRef} open className="analysis-detail">
         <summary>How we decided</summary>
         <p className="formula">
+          Profiles are model estimates, not measured audio.
           Match = round(100 × (1 − weighted average gap ÷ 10)). Higher is closer.
           Each axis costs 10 × weight × gap match points. Ties favor verified songs, then the smallest worst gap.
         </p>

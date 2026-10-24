@@ -33,15 +33,16 @@ try {
   record(await navigation.count() > 0, "Navbar has a navigation landmark");
   record(await page.locator(".wordmark svg").count() === 0, "Wordmark has no adjacent logo icon");
   record(await page.locator(".connection small").count() === 0, "Navbar has no inline connection helper text");
+  record(await page.locator('input[capture], button:has-text("Take a photo")').count() === 0, "Camera controls are removed");
+  record(await page.getByText("Used once to find your songs. Never saved.", { exact: true }).count() === 0, "Privacy helper text is removed");
   const controls = await page.evaluate(() => [
     document.querySelector(".site-header button"),
     document.querySelector(".actions button"),
-    document.querySelectorAll(".actions button")[1],
   ].map((node) => {
     const css = getComputedStyle(node);
     return [css.backgroundColor, css.color, css.borderRadius, css.minHeight];
   }));
-  record(controls.every((style) => JSON.stringify(style) === JSON.stringify(controls[0])), "Navbar, upload, and camera buttons share color, radius, and height");
+  record(controls.every((style) => JSON.stringify(style) === JSON.stringify(controls[0])), "Navbar and upload buttons share color, radius, and height");
   record(await page.locator(".photo-status").evaluate((node) => getComputedStyle(node).borderTopStyle === "dashed"), "Upload invitation restores the reference dashed inset");
   await page.screenshot({ path: "/tmp/vibe-navbar-initial.png", fullPage: true, style: "nextjs-portal { display:none!important; }" });
   await page.getByRole("button", { name: "Connect Spotify", exact: true }).click();
