@@ -9,11 +9,17 @@ const tokenSchema = z.object({
 });
 const searchSchema = z.object({
   tracks: z.object({
-    items: z.array(z.object({
-      id: z.string().regex(/^[A-Za-z0-9]{22}$/),
-      name: z.string().trim().min(1).max(600),
-      artists: z.array(z.object({ name: z.string().trim().min(1).max(600) })).min(1),
-    })).max(1),
+    items: z
+      .array(
+        z.object({
+          id: z.string().regex(/^[A-Za-z0-9]{22}$/),
+          name: z.string().trim().min(1).max(600),
+          artists: z
+            .array(z.object({ name: z.string().trim().min(1).max(600) }))
+            .min(1),
+        }),
+      )
+      .max(1),
   }),
 });
 
@@ -23,7 +29,8 @@ let pendingToken: Promise<string> | undefined;
 async function requestToken(): Promise<string> {
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-  if (!clientId?.trim() || !clientSecret?.trim()) throw new Error("Spotify is not configured");
+  if (!clientId?.trim() || !clientSecret?.trim())
+    throw new Error("Spotify is not configured");
   const startedAt = Date.now();
   const response = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
@@ -38,12 +45,16 @@ async function requestToken(): Promise<string> {
   });
   if (!response.ok) throw new Error("Spotify token failed");
   const token = tokenSchema.parse(await response.json());
-  cachedToken = { value: token.access_token, expiresAt: startedAt + token.expires_in * 1_000 };
+  cachedToken = {
+    value: token.access_token,
+    expiresAt: startedAt + token.expires_in * 1_000,
+  };
   return token.access_token;
 }
 
 async function getToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.value;
+  if (cachedToken && Date.now() < cachedToken.expiresAt)
+    return cachedToken.value;
   if (pendingToken) return pendingToken;
   pendingToken = requestToken();
   try {
@@ -54,7 +65,11 @@ async function getToken(): Promise<string> {
 }
 
 function normalize(value: string): string {
-  return value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
 }
 
 function quoteFilter(value: string): string {
@@ -64,7 +79,10 @@ function quoteFilter(value: string): string {
 async function search(candidate: Candidate): Promise<Resolution> {
   const token = await getToken();
   const url = new URL("https://api.spotify.com/v1/search");
-  url.searchParams.set("q", `track:${quoteFilter(candidate.title)} artist:${quoteFilter(candidate.artist)}`);
+  url.searchParams.set(
+    "q",
+    `track:${quoteFilter(candidate.title)} artist:${quoteFilter(candidate.artist)}`,
+  );
   url.searchParams.set("type", "track");
   url.searchParams.set("limit", "1");
   url.searchParams.set("market", "US");
@@ -76,9 +94,15 @@ async function search(candidate: Candidate): Promise<Resolution> {
   });
   if (!response.ok) throw new Error("Spotify search failed");
   const track = searchSchema.parse(await response.json()).tracks.items[0];
-  if (!track || !normalize(candidate.title) || !normalize(candidate.artist)
-    || normalize(track.name) !== normalize(candidate.title)
-    || !track.artists.some(artist => normalize(artist.name) === normalize(candidate.artist))) {
+  if (
+    !track ||
+    !normalize(candidate.title) ||
+    !normalize(candidate.artist) ||
+    normalize(track.name) !== normalize(candidate.title) ||
+    !track.artists.some(
+      (artist) => normalize(artist.name) === normalize(candidate.artist),
+    )
+  ) {
     throw new Error("Spotify track does not match");
   }
   return resolutionSchema.parse({
@@ -87,22 +111,26 @@ async function search(candidate: Candidate): Promise<Resolution> {
     uri: `spotify:track:${track.id}`,
     url: `https://open.spotify.com/track/${track.id}`,
     title: track.name,
-    artist: track.artists.map(artist => artist.name).join(", "),
+    artist: track.artists.map((artist) => artist.name).join(", "),
   });
 }
 
-export async function resolveCandidates(candidates: Candidate[]): Promise<(Candidate & { resolution: Resolution })[]> {
-  return Promise.all(candidates.map(async candidate => {
-    try {
-      return { ...candidate, resolution: await search(candidate) };
-    } catch {
-      return {
-        ...candidate,
-        resolution: {
-          kind: "unverified" as const,
-          url: `https://open.spotify.com/search/${encodeURIComponent(`${candidate.title} ${candidate.artist}`)}`,
-        },
-      };
-    }
-  }));
+export async function resolveCandidates(
+  candidates: Candidate[],
+): Promise<(Candidate & { resolution: Resolution })[]> {
+  return Promise.all(
+    candidates.map(async (candidate) => {
+      try {
+        return { ...candidate, resolution: await search(candidate) };
+      } catch {
+        return {
+          ...candidate,
+          resolution: {
+            kind: "unverified" as const,
+            url: `https://open.spotify.com/search/${encodeURIComponent(`${candidate.title} ${candidate.artist}`)}`,
+          },
+        };
+      }
+    }),
+  );
 }
