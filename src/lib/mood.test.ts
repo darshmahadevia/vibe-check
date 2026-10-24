@@ -4,7 +4,7 @@ const low: Profile = { energy: 0, positivity: 0, tempo: 0, texture: 0, space: 0,
 const high: Profile = { energy: 10, positivity: 10, tempo: 10, texture: 10, space: 10, nostalgia: 10 };
 const unverified: Resolution = { kind: "unverified", url: "https://open.spotify.com/search/test" };
 const verified: Resolution = { kind: "verified", trackId: "1234567890123456789012", uri: "spotify:track:1234567890123456789012", url: "https://open.spotify.com/track/1234567890123456789012", title: "Test", artist: "Artist" };
-const candidate = (profile: Profile, resolution = unverified) => ({ title: "Test", artist: "Artist", profile, fit_note: "Fits", resolution });
+const candidate = (profile: Profile, resolution: Resolution = unverified) => ({ title: "Test", artist: "Artist", profile, fit_note: "Fits", resolution });
 describe("transparent mood ranking", () => {
   it("scores perfect and opposite matches", () => {
     expect(matchScore(low, low, DEFAULT_WEIGHTS)).toBe(100);

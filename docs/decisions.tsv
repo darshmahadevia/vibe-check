@@ -3,3 +3,4 @@ ts	phase	decision	why	evidence	result
 2026-10-24T16:00:00Z	privacy	Do not log raw model output	Privacy rules override build-order logging suggestion	User brief	Chosen
 2026-10-24T15:45:00Z	ranking	Use fixed six-key schemas and rounded weighted distances	Preserve the exact brief and reproducible ranking	src/lib/mood.test.ts	13 tests passed
 2026-10-24T15:45:00Z	architecture	Keep thin route and concrete adapters	Both candidates agreed on boundaries but their alternate parameter contracts were rejected	docs/architecture.md	Chosen
+2026-10-24T15:46:00Z	inference	Disable SDK retries and retry only invalid output once	Normal photos use one generation and quota errors must not multiply calls	src/lib/server/gemma.test.ts	6 boundary tests passed

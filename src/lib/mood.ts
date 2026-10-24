@@ -45,7 +45,7 @@ export const resolutionSchema = z.discriminatedUnion("kind", [
 export type Resolution = z.infer<typeof resolutionSchema>;
 export const rankedCandidateSchema = candidateSchema.extend({ id: z.number().int().nonnegative(), rank: z.number().int().positive(), score: z.number().int().min(0).max(100), gaps: profileSchema, resolution: resolutionSchema });
 export type RankedCandidate = z.infer<typeof rankedCandidateSchema>;
-export const recommendationSchema = analysisSchema.omit({ candidates: true }).extend({ requestId: z.string(), candidates: z.array(rankedCandidateSchema).length(8), winnerId: z.number().int().nullable() });
+export const recommendationSchema = analysisSchema.omit({ candidates: true }).extend({ weights: rawWeightsSchema, requestId: z.string(), candidates: z.array(rankedCandidateSchema).length(8), winnerId: z.number().int().nullable() });
 export type Recommendation = z.infer<typeof recommendationSchema>;
 
 export function photoScores(photo: Analysis["photo_profile"]): Profile {
