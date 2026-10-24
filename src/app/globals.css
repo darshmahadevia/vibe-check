@@ -125,7 +125,7 @@ button svg {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  min-height: 116px;
+  min-height: 88px;
   border-bottom: 1px solid var(--line);
 }
 .wordmark {
@@ -197,11 +197,15 @@ p {
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 600px);
+  grid-template-columns: minmax(0, 750px);
   justify-content: center;
   column-gap: 56px;
-  row-gap: 30px;
-  padding: 76px 0 72px;
+  row-gap: 28px;
+  padding: 40px 0 48px;
+}
+.workbench[data-has-photo="false"] {
+  min-height: calc(100svh - 174px);
+  align-content: center;
 }
 .workbench[data-has-photo="true"] {
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
@@ -213,7 +217,19 @@ p {
 }
 .intro h1 {
   margin-inline: auto;
-  max-width: 600px;
+  max-width: 750px;
+}
+.headline-accent {
+  color: var(--accent);
+}
+.workbench[data-has-photo="false"] h1 {
+  font-size: clamp(3.2rem, 6vw, 4.5rem);
+  font-weight: 600;
+  line-height: 1.08;
+}
+.workbench[data-has-photo="false"] .headline-line,
+.workbench[data-has-photo="false"] .intro p > span {
+  display: block;
 }
 .workbench[data-has-photo="true"] .intro {
   text-align: left;
@@ -232,6 +248,12 @@ p {
 .workbench[data-has-photo="true"] .intro p {
   margin-inline: 0;
 }
+.workbench[data-has-photo="false"] .intro p {
+  max-width: 64ch;
+  margin-top: 20px;
+  font-size: 1rem;
+  line-height: 1.7;
+}
 .workbench[data-has-photo="false"] .photo-section {
   width: 100%;
   max-width: 480px;
@@ -249,20 +271,32 @@ p {
   flex-direction: column;
   text-align: center;
   justify-content: center;
-  gap: 18px;
-  min-height: 178px;
-  margin-bottom: 24px;
-  border: 1px dashed #616161;
-  border-radius: 12px;
-  padding: 24px 16px;
+  gap: 12px;
+  min-height: 0;
+  margin-bottom: 22px;
+}
+.photo-section:not([data-photo-state="ready"]) .photo-copy {
+  gap: 5px;
+}
+.photo-section:not([data-photo-state="ready"]) .photo-copy strong {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.photo-section:not([data-photo-state="ready"]) .photo-copy span {
+  font-size: 0.78rem;
 }
 .photo-section:not([data-photo-state="ready"]) .photo-placeholder {
-  width: 56px;
-  height: 56px;
-  border: 0;
-  background: #242424;
   color: var(--song);
-  border-radius: 12px;
+}
+.photo-placeholder svg {
+  display: block;
+  width: 204px;
+  height: 80px;
+  max-width: 100%;
+}
+.photo-wave-outer {
+  opacity: 0.55;
 }
 .photo-section[data-photo-state="preparing"] .photo-placeholder {
   color: var(--accent);
@@ -283,15 +317,9 @@ p {
   margin-bottom: 18px;
 }
 .photo-placeholder {
-  width: 51px;
-  height: 55px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  background: #181818;
-  color: var(--muted);
-  border: 1px dashed #616161;
-  border-radius: 9px;
 }
 .photo-copy {
   display: grid;
@@ -327,6 +355,15 @@ p {
 .actions .secondary {
   padding: 11px 8px;
   font-size: 0.76rem;
+}
+.actions .upload-photo {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: #000;
+}
+.actions .upload-photo:hover {
+  background: #e5e5e5;
+  border-color: #e5e5e5;
 }
 .find-song {
   grid-column: 1 / -1;
@@ -1125,6 +1162,10 @@ footer span:last-child {
     gap: 0;
     padding: 46px 0 42px;
   }
+  .workbench[data-has-photo="false"] {
+    min-height: 0;
+    padding: 36px 0 40px;
+  }
   .intro,
   .workbench[data-has-photo="true"] .intro {
     align-self: center;
@@ -1135,11 +1176,17 @@ footer span:last-child {
     max-width: 550px;
     font-size: clamp(2.7rem, 7.4vw, 3.8rem);
   }
+  .workbench[data-has-photo="false"] h1 {
+    font-size: clamp(2.5rem, 7.2vw, 3.8rem);
+  }
   .intro p,
   .workbench[data-has-photo="true"] .intro p {
     margin: 20px auto 0;
     max-width: 42ch;
     font-size: 0.85rem;
+  }
+  .workbench[data-has-photo="false"] .intro p {
+    font-size: 0.9rem;
   }
   .sleeve-stage {
     order: 2;
@@ -1205,10 +1252,17 @@ footer span:last-child {
   .workbench[data-has-photo="true"] {
     padding-top: 38px;
   }
+  .workbench[data-has-photo="false"] {
+    padding: 28px 0 32px;
+  }
   .intro h1,
   .workbench[data-has-photo="true"] h1 {
     font-size: clamp(2.6rem, 9.6vw, 3.4rem);
     max-width: 450px;
+  }
+  .workbench[data-has-photo="false"] h1 {
+    font-size: clamp(2.125rem, 9.1vw, 2.8rem);
+    letter-spacing: -0.035em;
   }
   .intro p,
   .workbench[data-has-photo="true"] .intro p {
@@ -1217,8 +1271,34 @@ footer span:last-child {
     line-height: 1.8;
     margin-top: 17px;
   }
+  .workbench[data-has-photo="false"] .intro p {
+    max-width: 42ch;
+    margin-top: 15px;
+    font-size: 0.8rem;
+    line-height: 1.7;
+  }
+  .workbench[data-has-photo="false"] .intro p > span + span {
+    margin-top: 3px;
+  }
   .photo-section {
     padding: 17px;
+  }
+  .photo-section:not([data-photo-state="ready"]) {
+    padding: 20px;
+  }
+  .photo-section:not([data-photo-state="ready"]) .photo-status {
+    gap: 9px;
+    margin-bottom: 18px;
+  }
+  .photo-section:not([data-photo-state="ready"]) .photo-copy strong {
+    font-size: 0.9rem;
+  }
+  .photo-section:not([data-photo-state="ready"]) .photo-copy span {
+    font-size: 0.7rem;
+  }
+  .photo-placeholder svg {
+    width: 164px;
+    height: 64px;
   }
   .photo-status {
     gap: 12px;

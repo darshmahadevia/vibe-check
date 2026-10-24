@@ -466,10 +466,13 @@ export default function Home() {
         )}
         <div className="workbench" data-has-photo={photo.kind === "ready"}>
           <motion.section layout={reducedMotion ? false : "position"} className="intro">
-            <h1>Every moment has a soundtrack.</h1>
+            <h1>
+              <span className="headline-line">Every moment has</span>{" "}
+              <span className="headline-line">a <span className="headline-accent">soundtrack.</span></span>
+            </h1>
             <p>
-              A late night. A slow morning. A feeling you can’t quite name.
-              Start with a photo. Find the song that fits.
+              <span>A late night. A slow morning. A feeling you can’t quite name.</span>{" "}
+              <span>Start with a photo. Find the song that fits.</span>
             </p>
           </motion.section>
           {photo.kind === "ready" && (
@@ -537,21 +540,30 @@ export default function Home() {
               ) : (
                 <>
                   <div className="photo-placeholder" aria-hidden="true">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <rect
-                        x="3"
-                        y="3"
-                        width="18"
-                        height="18"
-                        rx="3"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+                    <svg width="224" height="88" viewBox="0 0 224 88" fill="none">
                       <path
-                        d="m3 17 5-5 4 4 4-6 5 7"
+                        className="photo-wave-outer"
+                        d="M12 41v6m12-16v26m12-35v44m12-38v32m12-43v54m104-54v54m12-43v32m12-38v44m12-35v26m12-16v6"
                         stroke="currentColor"
-                        strokeWidth="1.5"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                      <rect
+                        x="78"
+                        y="10"
+                        width="68"
+                        height="68"
+                        rx="12"
+                        fill="var(--surface-raised)"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                      />
+                      <circle cx="99" cy="31" r="5" fill="currentColor" />
+                      <path
+                        d="m87 63 17-18 12 11 12-18 9 12"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
                         strokeLinejoin="round"
                       />
                     </svg>
@@ -569,7 +581,7 @@ export default function Home() {
             </motion.div>
             <div className="actions">
               <button
-                className="secondary"
+                className="secondary upload-photo"
                 onClick={() => upload.current?.click()}
               >
                 <svg

@@ -23,6 +23,19 @@ try {
     await page.goto(target, { waitUntil: "networkidle" });
     record(await page.locator(".sleeve-stage").count() === 0, "Empty state has no artwork gallery");
     record(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor === "rgb(0, 0, 0)"), "Page background is pitch black");
+    const composition = await page.evaluate(() => {
+      const heading = document.querySelector(".intro h1").getBoundingClientRect();
+      const upload = document.querySelector(".photo-section").getBoundingClientRect();
+      const action = document.querySelector(".find-song").getBoundingClientRect();
+      return {
+        centered: Math.abs(heading.left + heading.width / 2 - innerWidth / 2) < 2 &&
+          Math.abs(upload.left + upload.width / 2 - innerWidth / 2) < 2,
+        actionVisible: action.bottom <= innerHeight,
+      };
+    });
+    record(composition.centered, `Headline and upload panel are centered at ${settings.viewport.width}px`);
+    record(composition.actionVisible, `Photo actions fit in the first screen at ${settings.viewport.width}px`);
+    await page.screenshot({ path: `${captureDirectory}/opening-${settings.viewport.width}.png`, fullPage: true, style: "nextjs-portal { display:none!important; }" });
     const smoke = fs.readFileSync("scripts/browser-smoke.js", "utf8");
     const report = await page.evaluate(smoke);
     record(report.passed > 20, "Photo upload, recommendations, comparison, errors, and retry work");
