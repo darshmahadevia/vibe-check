@@ -19,6 +19,12 @@ import {
 } from "@/lib/mood";
 import { preparePhoto, type PreparedPhoto } from "@/lib/browser/photo";
 import {
+  isPhotoDrag,
+  loadBrowserPhoto,
+  parsePhotoDrop,
+  type PhotoDrop,
+} from "@/lib/browser/photo-drop";
+import {
   addToQueue,
   connectSpotify,
   disconnectSpotify,
@@ -49,6 +55,8 @@ export default function Home() {
   const [photo, setPhoto] = useState<PhotoState>({ kind: "empty" });
   const [result, setResult] = useState<ResultState>({ kind: "idle" });
   const [inputError, setInputError] = useState("");
+  const [fileDragActive, setFileDragActive] = useState(false);
+  const fileDragDepth = useRef(0);
   const [connection, setConnection] = useState<
     "disconnected" | "connecting" | "connected"
   >("disconnected");
@@ -65,8 +73,26 @@ export default function Home() {
   const resultRef = useRef<Recommendation | null>(null);
   const details = useRef<HTMLDetailsElement>(null);
 
+  useEffect(() => {
+    if (!fileDragActive) return;
+    const clearDrag = () => {
+      fileDragDepth.current = 0;
+      setFileDragActive(false);
+    };
+    const cancelDrag = (event: KeyboardEvent) => {
+      if (event.key === "Escape") clearDrag();
+    };
+    window.addEventListener("keydown", cancelDrag);
+    window.addEventListener("blur", clearDrag);
+    return () => {
+      window.removeEventListener("keydown", cancelDrag);
+      window.removeEventListener("blur", clearDrag);
+    };
+  }, [fileDragActive]);
+
   useEffect(
     () => () => {
+      ++generation.current;
       controller.current?.abort();
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     },
@@ -79,9 +105,17 @@ export default function Home() {
 
   async function choosePhoto(file: File | undefined) {
     if (!file) return;
+    await acceptPhoto({ kind: "file", file });
+  }
+  async function acceptPhoto(source: Exclude<PhotoDrop, { kind: "not-image" }>) {
     const current = ++generation.current;
     controller.current?.abort();
-    controller.current = null;
+    const abort = new AbortController();
+    controller.current = abort;
+    const timeout =
+      source.kind === "image-url"
+        ? window.setTimeout(() => abort.abort(), 20_000)
+        : undefined;
     resultRef.current = null;
     setResult({ kind: "idle" });
     setInputError("");
@@ -92,6 +126,12 @@ export default function Home() {
       previewUrl.current = null;
     }
     try {
+      if (source.kind === "unsupported-image") throw new Error(source.message);
+      const file =
+        source.kind === "file"
+          ? source.file
+          : await loadBrowserPhoto({ url: source.url, signal: abort.signal });
+      window.clearTimeout(timeout);
       const prepared = await preparePhoto(file);
       if (current !== generation.current) {
         URL.revokeObjectURL(prepared.preview);
@@ -107,6 +147,9 @@ export default function Home() {
           ? error.message
           : "That file didn't work. Try a JPEG or PNG.",
       );
+    } finally {
+      window.clearTimeout(timeout);
+      if (controller.current === abort) controller.current = null;
     }
   }
   async function queueSong(
@@ -271,6 +314,42 @@ export default function Home() {
 
   return (
     <MotionConfig reducedMotion="user" transition={{ duration: 0.22 }}>
+      <div
+        className="page-drop-zone"
+        data-file-drag-active={fileDragActive}
+        onDragEnter={(event) => {
+          if (!isPhotoDrag(event.dataTransfer)) return;
+          event.preventDefault();
+          fileDragDepth.current += 1;
+          setFileDragActive(true);
+        }}
+        onDragOver={(event) => {
+          if (!isPhotoDrag(event.dataTransfer)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }}
+        onDragLeave={() => {
+          fileDragDepth.current = Math.max(0, fileDragDepth.current - 1);
+          if (fileDragDepth.current === 0) setFileDragActive(false);
+        }}
+        onDragEnd={() => {
+          fileDragDepth.current = 0;
+          setFileDragActive(false);
+        }}
+        onDrop={(event) => {
+          fileDragDepth.current = 0;
+          setFileDragActive(false);
+          const drop = parsePhotoDrop(event.dataTransfer);
+          if (drop.kind === "not-image") return;
+          event.preventDefault();
+          void acceptPhoto(drop);
+        }}
+      >
+        {fileDragActive && (
+          <div className="file-drop-feedback" role="status">
+            <span>Drop your photo here</span>
+          </div>
+        )}
       <main>
         <header className="site-header">
           <Link href="/" className="wordmark">
@@ -364,11 +443,6 @@ export default function Home() {
             layout={reducedMotion ? false : "position"}
             aria-label="Choose a photo"
             className="photo-section"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              void choosePhoto(event.dataTransfer.files[0]);
-            }}
           >
             <input
               ref={camera}
@@ -713,6 +787,7 @@ export default function Home() {
           </span>
         </footer>
       </main>
+      </div>
     </MotionConfig>
   );
 }

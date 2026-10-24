@@ -20,6 +20,33 @@
 body {
   margin: 0;
 }
+.page-drop-zone {
+  min-height: 100dvh;
+}
+.page-drop-zone[data-file-drag-active="true"] .photo-section {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.file-drop-feedback {
+  position: fixed;
+  inset: 12px;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px;
+  border: 2px dashed var(--accent);
+  border-radius: 16px;
+  pointer-events: none;
+}
+.file-drop-feedback span {
+  padding: 12px 20px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #24170e;
+  font-weight: 700;
+}
 main {
   max-width: 1320px;
   margin: auto;
