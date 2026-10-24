@@ -1,6 +1,12 @@
 ts	phase	decision	why	evidence	result
-2026-10-24T16:00:00Z	frame	Build base app in an empty repository	User explicitly requests end-to-end base before improvements	docs/implementation-plan.md	In progress
-2026-10-24T16:00:00Z	privacy	Do not log raw model output	Privacy rules override build-order logging suggestion	User brief	Chosen
+2026-10-24T15:39:00Z	frame	Build base app in an empty repository	User explicitly requests end-to-end base before improvements	docs/implementation-plan.md	In progress
+2026-10-24T15:39:00Z	privacy	Do not log raw model output	Privacy rules override build-order logging suggestion	User brief	Chosen
 2026-10-24T15:45:00Z	ranking	Use fixed six-key schemas and rounded weighted distances	Preserve the exact brief and reproducible ranking	src/lib/mood.test.ts	13 tests passed
 2026-10-24T15:45:00Z	architecture	Keep thin route and concrete adapters	Both candidates agreed on boundaries but their alternate parameter contracts were rejected	docs/architecture.md	Chosen
 2026-10-24T15:46:00Z	inference	Disable SDK retries and retry only invalid output once	Normal photos use one generation and quota errors must not multiply calls	src/lib/server/gemma.test.ts	6 boundary tests passed
+2026-10-24T16:00:07Z	queue	Bind pending OAuth actions to generation and result	Prevent stale song queueing after replacement or retry	src/app/page.tsx	Independent follow-up review passed
+2026-10-24T16:00:07Z	browser	Use deterministic recommendations for UI checks	Service credentials are not configured; do not claim live integration	scripts/browser-smoke.js	19 checks passed at mobile and desktop widths
+2026-10-24T16:00:07Z	capture	Use standalone headless Chrome for documentation screenshots	T3 snapshot timed out twice on the results iframe	scripts/capture-docs.mjs	Fallback disclosed
+2026-10-24T16:00:07Z	delivery	Push logical commits directly to main	User explicitly requested small commits while building	git log main	Pushed
+2026-10-24T16:00:07Z	deployment	Link Vercel to the GitHub main branch	User requests a deployed Vercel app	https://vibe-check-three-nu.vercel.app	HTTP 200; credentials still missing
+2026-10-24T16:03:34Z	submission	Lock the request synchronously before React rerenders	A real browser double click reproduced duplicate inference requests	scripts/browser-smoke.js	Failing reproduction then passing deployed check
