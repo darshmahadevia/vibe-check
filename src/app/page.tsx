@@ -105,6 +105,7 @@ export default function Home() {
     if (!file) return;
     const current = ++generation.current;
     controller.current?.abort();
+    controller.current = null;
     resultRef.current = null;
     setResult({ kind: "idle" });
     setInputError("");
@@ -188,7 +189,12 @@ export default function Home() {
     }
   }
   async function findSong() {
-    if (photo.kind !== "ready" || result.kind === "loading") return;
+    if (
+      photo.kind !== "ready" ||
+      result.kind === "loading" ||
+      controller.current
+    )
+      return;
     const current = ++generation.current;
     resultRef.current = null;
     const abort = new AbortController();
@@ -235,11 +241,14 @@ export default function Home() {
               ? error.message
               : "Something went wrong. Please try again.",
       });
+    } finally {
+      if (controller.current === abort) controller.current = null;
     }
   }
   function reset() {
     ++generation.current;
     controller.current?.abort();
+    controller.current = null;
     resultRef.current = null;
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = null;
