@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const { generateContent } = vi.hoisted(() => ({ generateContent: vi.fn() }));
 vi.mock("@google/genai", () => ({
@@ -29,6 +29,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("GEMINI_API_KEY", "test-key");
 });
+afterEach(() => vi.restoreAllMocks());
 describe("Gemma boundary", () => {
   it("parses fenced JSON and defaults invalid weights", () => {
     const data = validAnalysis();
@@ -66,12 +67,45 @@ describe("Gemma boundary", () => {
     expect(generateContent).toHaveBeenCalledTimes(2);
   });
   it("does not retry quota errors", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     generateContent.mockRejectedValue({ status: 429 });
     await expect(analyzePhoto(new Uint8Array([1]))).rejects.toMatchObject({
       code: "quota",
       status: 429,
     });
     expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+  it("records the provider status without logging private error content", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    generateContent.mockRejectedValue(
+      Object.assign(new Error("private credentials and photo data"), {
+        status: 403,
+      }),
+    );
+    await expect(analyzePhoto(new Uint8Array([1]))).rejects.toMatchObject({
+      code: "model_unavailable",
+      status: 503,
+    });
+    expect(log).toHaveBeenCalledExactlyOnceWith("Gemma request failed", {
+      providerStatus: 403,
+      failure: "request",
+      elapsedMs: expect.any(Number),
+    });
+    expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+  it("identifies aborted requests without exposing the error message", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    generateContent.mockRejectedValue(
+      new DOMException("private request details", "AbortError"),
+    );
+    await expect(analyzePhoto(new Uint8Array([1]))).rejects.toMatchObject({
+      code: "model_unavailable",
+    });
+    expect(log).toHaveBeenCalledExactlyOnceWith("Gemma request failed", {
+      providerStatus: null,
+      failure: "aborted",
+      elapsedMs: expect.any(Number),
+    });
   });
   it("rejects duplicates and missing profile fields", () => {
     const data = validAnalysis();

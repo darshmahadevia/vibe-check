@@ -38,6 +38,7 @@ export async function analyzePhoto(image: Uint8Array): Promise<Analysis> {
   });
   for (let attempt = 0; attempt < 2; attempt++) {
     let text: string;
+    const startedAt = Date.now();
     try {
       const response = await ai.models.generateContent({
         model: process.env.GEMMA_MODEL || "gemma-4-26b-a4b-it",
@@ -72,6 +73,14 @@ export async function analyzePhoto(image: Uint8Array): Promise<Analysis> {
         error && typeof error === "object" && "status" in error
           ? error.status
           : undefined;
+      console.error("Gemma request failed", {
+        providerStatus: typeof status === "number" ? status : null,
+        failure:
+          error instanceof Error && error.name === "AbortError"
+            ? "aborted"
+            : "request",
+        elapsedMs: Date.now() - startedAt,
+      });
       if (status === 429)
         throw new RecommendationError(
           "quota",
