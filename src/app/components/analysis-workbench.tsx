@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode, Ref } from "react";
+import type { QueueState } from "../page";
 import { motion, useReducedMotion } from "motion/react";
 import {
   PARAMS,
@@ -10,15 +11,6 @@ import {
   type RankedCandidate,
   type Recommendation,
 } from "@/lib/mood";
-
-const axisColors = {
-  energy: "#d99771",
-  positivity: "#b6be8c",
-  tempo: "#c5b387",
-  texture: "#9fafaa",
-  space: "#9aa9be",
-  nostalgia: "#ba9dba",
-} satisfies Record<Param, string>;
 
 type AxisRow = {
   param: Param;
@@ -30,7 +22,6 @@ type AxisRow = {
   weight: number;
   gap: number;
   penalty: number;
-  color: string;
 };
 
 function comparisonRows({
@@ -54,87 +45,8 @@ function comparisonRows({
       weight,
       gap,
       penalty: 10 * weight * gap,
-      color: axisColors[param],
     };
   });
-}
-
-function radarPoint(index: number, value: number) {
-  const angle = -Math.PI / 2 + (index * Math.PI) / 3;
-  const radius = (value / 10) * 118;
-  return {
-    x: 220 + Math.cos(angle) * radius,
-    y: 190 + Math.sin(angle) * radius,
-  };
-}
-
-function radarPolygon(values: number[]) {
-  return values.map((value, index) => {
-    const point = radarPoint(index, value);
-    return `${point.x},${point.y}`;
-  }).join(" ");
-}
-
-function ProfileRadar({ rows, song }: { rows: AxisRow[]; song: RankedCandidate }) {
-  const reducedMotion = useReducedMotion();
-  const transition = { duration: reducedMotion ? 0 : 0.22 };
-  return (
-    <figure className="profile-radar">
-      <svg viewBox="0 0 440 380" role="img" aria-labelledby="radar-title radar-description">
-        <title id="radar-title">Photo compared with {song.title}</title>
-        <desc id="radar-description">
-          Six estimated mood axes on the same 0 to 10 scale. Solid ember circles represent the photo.
-          Dashed sage diamonds represent the song. {rows.map((row) => `${row.label}, photo ${row.photo}, song ${row.song}.`).join(" ")}
-        </desc>
-        <g aria-hidden="true">
-          {[2, 4, 6, 8, 10].map((level) => (
-            <polygon className="radar-grid" key={level} points={radarPolygon(rows.map(() => level))} />
-          ))}
-          {rows.map((row, index) => {
-            const end = radarPoint(index, 10);
-            return <line className="radar-spoke" key={row.param} x1="220" y1="190" x2={end.x} y2={end.y} />;
-          })}
-          <polygon className="radar-photo" points={radarPolygon(rows.map((row) => row.photo))} />
-          <motion.polygon
-            className="radar-song"
-            initial={false}
-            animate={{ points: radarPolygon(rows.map((row) => row.song)) }}
-            transition={transition}
-          />
-          {rows.map((row, index) => {
-            const photo = radarPoint(index, row.photo);
-            const songPoint = radarPoint(index, row.song);
-            const label = radarPoint(index, 13.5);
-            return (
-              <g key={row.param}>
-                <circle className="radar-photo-dot" cx={photo.x} cy={photo.y} r="4" />
-                <motion.path
-                  className="radar-song-dot"
-                  initial={false}
-                  animate={{ d: `M ${songPoint.x} ${songPoint.y - 6} l 6 6 -6 6 -6 -6 Z` }}
-                  transition={transition}
-                />
-                <text className="radar-axis-label" x={label.x} y={label.y - 3} textAnchor="middle">{row.label}</text>
-                <text className="radar-axis-values" x={label.x} y={label.y + 17} textAnchor="middle">
-                  <tspan className="photo-ink">{row.photo}</tspan>
-                  <tspan className="radar-separator"> / </tspan>
-                  <tspan className="song-ink">{row.song}</tspan>
-                </text>
-              </g>
-            );
-          })}
-          {[0, 5, 10].map((value) => (
-            <text className="radar-scale" key={value} x="229" y={190 - value * 11.8 + 4}>{value}</text>
-          ))}
-        </g>
-      </svg>
-      <figcaption className="chart-legend">
-        <span><i className="photo-key" aria-hidden="true" />Photo</span>
-        <span><i className="song-key" aria-hidden="true" />Song</span>
-        <span className="chart-scale">Shared scale 0–10</span>
-      </figcaption>
-    </figure>
-  );
 }
 
 function WeightDistribution({ rows, reason }: { rows: AxisRow[]; reason: string }) {
@@ -142,15 +54,9 @@ function WeightDistribution({ rows, reason }: { rows: AxisRow[]; reason: string 
     <section className="weight-distribution" aria-labelledby="weights-title">
       <h3 id="weights-title">What mattered most</h3>
       <p>{reason}</p>
-      <div className="weight-strip" aria-hidden="true">
-        {rows.map((row) => (
-          <span key={row.param} style={{ width: `${row.weight * 100}%`, background: row.color }} />
-        ))}
-      </div>
       <div className="weight-legend">
         {rows.map((row) => (
           <div className="weight-row" key={row.param}>
-            <span className="axis-key" style={{ background: row.color }} aria-hidden="true" />
             <span>{row.label}</span>
             <span>{(row.weight * 100).toFixed(1)}%</span>
           </div>
@@ -164,26 +70,54 @@ function CandidateRanking({
   recommendation,
   selectedId,
   onSelect,
+  queue,
 }: {
+  queue: QueueControls;
   recommendation: Recommendation;
   selectedId: RankedCandidate["id"] | null;
   onSelect: (id: RankedCandidate["id"]) => void;
 }) {
   const reducedMotion = useReducedMotion();
+  const available = recommendation.candidates.some((song) =>
+    song.resolution.kind === "verified" &&
+    !queue.queues[`${recommendation.requestId}:${song.id}`]);
+  const retryable = recommendation.candidates.some((song) =>
+    song.resolution.kind === "verified" &&
+    queue.queues[`${recommendation.requestId}:${song.id}`]?.kind === "error");
   return (
     <section className="candidate-ranking" aria-labelledby="ranking-title">
       <div className="ranking-heading">
-        <h3 id="ranking-title">All eight candidates</h3>
+        <h3 id="ranking-title">Curate your queue</h3>
         <span>Similarity</span>
       </div>
-      <p>Choose a song to compare. Your queue stays as it is.</p>
+      <p>Select songs for Spotify. They’ll be added in ranked order. Choose a title to compare its mood.</p>
+      <div className="batch-controls">
+        <div className="batch-selection-actions">
+          <button className="secondary" disabled={queue.queueBusy || (!available && !retryable)} onClick={queue.onSelectAvailable}>Select available</button>
+          <button className="secondary" disabled={queue.queueBusy || !queue.queueSelection.size} onClick={queue.onClearQueue}>Clear</button>
+        </div>
+        <button disabled={queue.queueBusy || !queue.queueSelection.size} onClick={queue.onQueueSelected}>
+          {queue.queueBusy ? "Preparing your queue…" : `${queue.connected ? "Add selected" : "Connect & add selected"} (${queue.queueSelection.size})`}
+        </button>
+      </div>
       <ol className="candidates">
-        {recommendation.candidates.map((song) => (
-          <li key={song.id}>
+        {recommendation.candidates.map((song) => {
+          const state = queue.queues[`${recommendation.requestId}:${song.id}`];
+          const added = state?.kind === "added" || (state && state.confirmed);
+          const unavailable = song.resolution.kind !== "verified";
+          return (
+          <li key={song.id} data-queue-state={state?.kind}>
+            <label className="queue-choice">
+              <input type="checkbox" aria-label={`Select ${song.title} by ${song.artist} for queue`}
+                checked={queue.queueSelection.has(song.id)}
+                disabled={queue.queueBusy || unavailable || !!added || state?.kind === "adding"}
+                onChange={() => queue.onToggleQueue(song.id)} />
+            </label>
             <button
               type="button"
               className="candidate"
               aria-pressed={selectedId === song.id}
+              aria-label={`Compare ${song.title} by ${song.artist}`}
               onClick={() => onSelect(song.id)}
             >
               <span className="rank">{song.rank}</span>
@@ -204,9 +138,14 @@ function CandidateRanking({
                 />
               </span>
             </button>
+            <div className="candidate-footer">
+              <span className="candidate-queue-status" role="status">
+                {added ? "Queued" : state?.kind === "adding" ? "Adding…" : state?.kind === "error" ? state.message : unavailable ? "Unavailable for queueing" : queue.queueSelection.has(song.id) ? "Selected for queue" : ""}
+              </span>
             <a className="spotify-link" href={song.resolution.url} target="_blank" rel="noopener noreferrer">Open in Spotify</a>
+            </div>
           </li>
-        ))}
+        );})}
       </ol>
     </section>
   );
@@ -233,12 +172,23 @@ function PreciseComparison({ rows }: { rows: AxisRow[] }) {
           </div>
           <div className="bar-ends"><span>0 · {row.ends[0]}</span><span>{row.ends[1]} · 10</span></div>
           <p>{row.evidence}</p>
-          <div className="axis-impact"><span>Gap {row.gap} / 10</span><span>{number.format(row.penalty)} match points lost</span></div>
+          <div className="axis-impact"><span>Gap {row.gap} / 10</span><span>{number.format(row.penalty)} points from match</span></div>
         </section>
       ))}
     </div>
   );
 }
+
+type QueueControls = {
+  queueSelection: Set<number>;
+  queues: Record<string, QueueState>;
+  queueBusy: boolean;
+  connected: boolean;
+  onToggleQueue: (id: number) => void;
+  onSelectAvailable: () => void;
+  onClearQueue: () => void;
+  onQueueSelected: () => void;
+};
 
 export function AnalysisWorkbench({
   recommendation,
@@ -246,7 +196,8 @@ export function AnalysisWorkbench({
   onSelect,
   detailsRef,
   children,
-}: {
+  ...queue
+}: QueueControls & {
   recommendation: Recommendation;
   selectedId: RankedCandidate["id"] | null;
   onSelect: (id: RankedCandidate["id"]) => void;
@@ -264,15 +215,7 @@ export function AnalysisWorkbench({
         <p>Six mood estimates. Eight songs. A closer look at why they fit.</p>
       </div>
       <div className="analysis-overview">
-        <div className="profile-overview">
-          <section aria-labelledby="profile-title">
-            <h3 id="profile-title">The shape of the match</h3>
-            <p className="compared-song">Comparing <strong>{song.title}</strong> <span>by {song.artist}</span></p>
-            <ProfileRadar rows={rows} song={song} />
-          </section>
-          <WeightDistribution rows={rows} reason={recommendation.weights_reason} />
-        </div>
-        <CandidateRanking recommendation={recommendation} selectedId={selectedId} onSelect={onSelect} />
+        <CandidateRanking recommendation={recommendation} selectedId={selectedId} onSelect={onSelect} queue={queue} />
       </div>
       <section className="selected-comparison" aria-labelledby="comparison-title">
         <div className="comparison-heading">
@@ -286,6 +229,7 @@ export function AnalysisWorkbench({
         <PreciseComparison rows={rows} />
         {children}
       </section>
+      <WeightDistribution rows={rows} reason={recommendation.weights_reason} />
       <details ref={detailsRef} open className="analysis-detail">
         <summary>How we decided</summary>
         <p className="formula">

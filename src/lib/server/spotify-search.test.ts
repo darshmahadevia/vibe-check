@@ -265,6 +265,31 @@ describe("Spotify search boundary", () => {
     });
   });
 
+  it.each([
+    ["https://i.scdn.co/image/ab67616d0000b2730123456789abcdef", true],
+    ["https://i.scdn.co.evil.example/image/abc", false],
+    ["http://i.scdn.co/image/abc", false],
+    ["https://user@i.scdn.co/image/abc", false],
+    ["https://i.scdn.co/image/abc?redirect=evil", false],
+    ["javascript:alert(1)", false],
+    ["not-a-url", false],
+    ["", false],
+    [null, false],
+  ])("accepts only Spotify album images from the search boundary (%s)", async (url, accepted) => {
+    fetchMock.mockImplementation(async (input) =>
+      requestUrl(input).pathname === "/api/token" ? tokenResponse() : Response.json({
+        tracks: { items: [{ id: trackId, name: "Song 0", artists: [{ name: "Artist" }],
+          album: { images: [{ url }] },
+        }] },
+      }));
+    const { resolveCandidates } = await import("./spotify-search");
+    const [candidate] = await resolveCandidates([candidates[0]]);
+    expect(candidate.resolution.kind).toBe("verified");
+    if (candidate.resolution.kind === "verified") {
+      expect(candidate.resolution.albumCoverUrl).toBe(accepted ? url : undefined);
+    }
+  });
+
   it("escapes quoted filters and encodes the fallback search path", async () => {
     const candidate = {
       ...candidates[0],

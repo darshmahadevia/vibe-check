@@ -102,6 +102,12 @@ export const analysisSchema = z.object({
     ),
 });
 export type Analysis = z.infer<typeof analysisSchema>;
+export const albumCoverUrlSchema = z.string().url().pipe(z.string().refine((value) => {
+  const url = new URL(value);
+  return url.protocol === "https:" && url.hostname === "i.scdn.co" &&
+    url.port === "" && url.username === "" && url.password === "" &&
+    /^\/image\/[A-Za-z0-9]+$/.test(url.pathname) && !url.search && !url.hash;
+}, "Expected a Spotify album image"));
 export const resolutionSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("verified"),
@@ -110,6 +116,7 @@ export const resolutionSchema = z.discriminatedUnion("kind", [
     url: z.string().url(),
     title: text,
     artist: text,
+    albumCoverUrl: albumCoverUrlSchema.optional(),
   }),
   z.object({ kind: z.literal("unverified"), url: z.string().url() }),
 ]);

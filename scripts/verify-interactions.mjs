@@ -7,6 +7,8 @@ const browser = await chromium.launch({
   ...(process.env.VIBE_CHROME_PATH ? { executablePath: process.env.VIBE_CHROME_PATH } : {}),
 });
 const checks = [];
+const captureDirectory = process.env.VIBE_SCREENSHOTS_DIR || "docs/screenshots";
+fs.mkdirSync(captureDirectory, { recursive: true });
 const target = process.env.VIBE_CHECK_URL || "http://127.0.0.1:3000";
 const record = (condition, label) => {
   assert(condition, label);
@@ -81,7 +83,7 @@ try {
   const firstArtwork = sleeves.first().locator(".sleeve-lift");
   const restingTop = await stableTop(firstArtwork);
   await page.waitForFunction(() => getComputedStyle(document.querySelector(".sleeve-stage")).filter === "blur(0px)");
-  await page.locator(".workbench").screenshot({ path: "docs/screenshots/hero-photo.png", style: "nextjs-portal { display: none !important; }" });
+  await page.locator(".workbench").screenshot({ path: `${captureDirectory}/hero-photo.png`, style: "nextjs-portal { display: none !important; }" });
   await sleeves.first().focus();
   record(await waitForRise(firstArtwork, restingTop), "Keyboard focus visibly raises a CD");
   await page.keyboard.press("Enter");
@@ -98,7 +100,7 @@ try {
     record(await waitForRise(artwork, top), `Hover visibly raises CD ${index + 1}`);
     if (index === 0) {
       await stableTop(artwork);
-      await page.locator(".workbench").screenshot({ path: "docs/screenshots/hero-hover.png", style: "nextjs-portal { display: none !important; }" });
+      await page.locator(".workbench").screenshot({ path: `${captureDirectory}/hero-hover.png`, style: "nextjs-portal { display: none !important; }" });
     }
     await page.mouse.move(2, 2);
   }
@@ -122,17 +124,12 @@ try {
   const smoke = fs.readFileSync("scripts/browser-smoke.js", "utf8");
   const report = await page.evaluate(smoke.replace("passed: checks.length,", "fixture: result, passed: checks.length,"));
   record(await sleeves.count() === 1, "Recommendations alone do not add song CDs");
-  const radar = page.locator(".profile-radar svg");
-  record(await radar.getAttribute("role") === "img", "Mood chart exposes an accessible description");
-  const initialSongShape = await page.locator(".radar-song").getAttribute("points");
   await page.locator(".candidate").nth(2).click();
-  await page.waitForFunction((previous) => document.querySelector(".radar-song")?.getAttribute("points") !== previous, initialSongShape);
-  record((await radar.locator("title").textContent()).includes("Dreams"), "Selecting a song updates the chart title");
-  record((await page.locator(".compared-song").innerText()).includes("Dreams"), "Comparison heading identifies the selected song");
+  await page.getByRole("heading", { name: "Dreams, parameter by parameter" }).waitFor();
   record((await page.locator("#winner-title").innerText()) === "Holocene", "Comparing an alternative preserves the verified winner");
-  record(await page.locator(".precise-comparison .mood-row").count() === 6, "Six paired mood comparisons remain visible");
-  record(await page.locator(".candidate-track").count() === 8, "Every ranked song has a visual similarity bar");
-  record(await page.locator(".weight-strip > span").count() === 6, "Weight distribution represents all six mood axes");
+  record(await page.locator(".precise-comparison .mood-row").count() === 6, "Six labeled mood comparisons remain visible");
+  record(await page.locator(".candidate-track").count() === 8, "Every ranked song has a similarity bar");
+  record(await page.locator(".weight-row").count() === 6, "Weights show all six mood axes");
   const reduced = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
   await reduced.goto(target, { waitUntil: "networkidle" });
   await reduced.getByLabel("Upload a photo", { exact: true }).setInputFiles(photoFile);
@@ -178,6 +175,8 @@ try {
   } }));
   await page.route("https://api.spotify.com/v1/me/player/queue?**", (route) => { pendingQueue.push(route); });
   await page.getByRole("button", { name: "Connect Spotify", exact: true }).click();
+  await page.getByRole("button", { name: "Connect Spotify to add to queue", exact: true }).waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "Add to queue", exact: true }).click();
   await page.getByRole("button", { name: "Adding to queue…", exact: true }).waitFor();
   record(await sleeves.count() === 1, "A pending queue request keeps only the photo CD");
   await (await nextQueue()).fulfill({ status: 404, body: "" });
@@ -202,31 +201,18 @@ try {
   record(await waitForRise(queuedArtwork, queuedTop), "The queued CD retains hover lift");
   await page.mouse.move(2, 2);
   await stableTop(page.locator('[data-disc-kind="photo"] .sleeve-lift'));
-  await page.locator(".workbench").screenshot({ path: "docs/screenshots/hero-queued.png", style: "nextjs-portal { display: none !important; }" });
+  await page.locator(".workbench").screenshot({ path: `${captureDirectory}/hero-queued.png`, style: "nextjs-portal { display: none !important; }" });
   await page.locator(".candidate").nth(3).click();
-  await page.getByRole("button", { name: "Add to queue instead", exact: true }).click();
+  await page.getByRole("button", { name: "Add this song to queue", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".selected-comparison button")?.disabled);
   record(await sleeves.count() === 2, "A second pending song does not appear early");
   await (await nextQueue()).fulfill({ status: 204, body: "" });
   await page.waitForFunction(() => document.querySelectorAll(".sleeve-stage button").length === 3);
   record(await page.locator('.sleeve-trigger[data-disc-kind="queued"]').count() === 2, "A second confirmed song adds a distinct CD");
-  await page.getByRole("button", { name: "Add to queue instead", exact: true }).click();
-  await page.waitForFunction(() => document.querySelector(".selected-comparison button")?.disabled);
-  const repeatRequest = await nextQueue();
-  await page.waitForTimeout(750);
-  record(await sleeves.count() === 3, "Requeueing preserves previously confirmed CDs");
-  await repeatRequest.fulfill({ status: 503, body: "" });
-  await page.locator(".selected-comparison").getByText(/Spotify could not add the song/).waitFor();
-  record(await sleeves.count() === 3, "A failed repeat request preserves the confirmed CD without duplication");
-  await page.getByRole("button", { name: "Add to queue instead", exact: true }).click();
-  await page.waitForFunction(() => document.querySelector(".selected-comparison button")?.disabled);
-  const oldRequest = await nextQueue();
+  record(await page.getByRole("button", { name: "Added to queue", exact: true }).isDisabled(), "Confirmed songs cannot be queued twice");
   await page.getByLabel("Upload a photo", { exact: true }).setInputFiles(photoFile);
   await page.waitForFunction(() => document.querySelectorAll(".sleeve-stage button").length === 1 && !document.querySelector(".results"));
   record(await sleeves.count() === 1, "Replacing the photo clears old song CDs");
-  await oldRequest.fulfill({ status: 204, body: "" });
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  record(await sleeves.count() === 1, "A late queue confirmation cannot populate a replacement photo");
   await page.route("**/api/recommend", (route) => route.fulfill({ json: { ...report.fixture, requestId: "replacement-photo" } }));
   await page.getByRole("button", { name: "Find my song", exact: true }).click();
   await page.getByRole("button", { name: "Adding to queue…", exact: true }).waitFor();

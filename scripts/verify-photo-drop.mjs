@@ -96,21 +96,21 @@ try {
   const panel = await pointFor(".photo-section");
   await drag("dragEnter", panel);
   await drag("dragOver", panel);
-  await page.getByRole("status").getByText("Drop your photo here", { exact: true }).waitFor();
+  await page.locator(".file-drop-feedback").getByText("Drop your photo here", { exact: true }).waitFor();
   record(true, "A native file drag displays the drop instruction");
   await drag("dragOver", await pointFor(".actions .secondary:first-child"));
-  record(await page.getByRole("status").isVisible(), "Drop feedback stays visible over child controls");
+  record(await page.locator(".file-drop-feedback").isVisible(), "Drop feedback stays visible over child controls");
   await page.screenshot({ path: path.join(directory, "drag-feedback.png"), style: "nextjs-portal { display:none!important; }" });
   await page.keyboard.press("Escape");
   await drag("dragCancel", panel);
-  await page.getByRole("status").waitFor({ state: "hidden", timeout: 2000 });
+  await page.locator(".file-drop-feedback").waitFor({ state: "hidden", timeout: 2000 });
   record(true, "Escape cancels a native drag and clears the feedback");
   await drag("dragEnter", panel, invalid);
   await drag("dragOver", panel, invalid);
   await drag("drop", panel, invalid);
   await page.getByRole("alert").filter({ hasText: "That file didn't work" }).waitFor();
   record(true, "An invalid dropped file shows a recovery message");
-  record(await page.getByRole("status").count() === 0, "An invalid drop clears the drag feedback");
+  record(await page.locator(".file-drop-feedback").count() === 0, "An invalid drop clears the drag feedback");
   const textAllowed = await page.locator(".intro").evaluate((element) => {
     const transfer = new DataTransfer();
     transfer.setData("text/plain", "ordinary text");

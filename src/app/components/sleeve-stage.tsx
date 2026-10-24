@@ -13,7 +13,7 @@ import type { Resolution } from "@/lib/mood";
 
 export type QueuedSong = Pick<
   Extract<Resolution, { kind: "verified" }>,
-  "title" | "artist"
+  "title" | "artist" | "albumCoverUrl"
 > & { id: string };
 
 type StageDisc =
@@ -28,6 +28,23 @@ type SleeveInteraction =
       id: string;
       inspected: string | null;
     };
+
+function QueuedArtwork({ song }: { song: QueuedSong }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className={`sleeve-art artwork-queued${song.albumCoverUrl && !failed ? " has-cover" : ""}`}>
+      {song.albumCoverUrl && !failed ? (
+        <Image src={song.albumCoverUrl} alt="" fill unoptimized sizes="250px" onError={() => setFailed(true)} />
+      ) : (
+        <>
+          <span className="art-edition">ADDED TO YOUR QUEUE</span>
+          <strong>{song.title}</strong>
+          <span className="art-subtitle">{song.artist}</span>
+        </>
+      )}
+    </span>
+  );
+}
 
 export function SleeveStage({
   photoPreview,
@@ -184,14 +201,7 @@ export function SleeveStage({
                             </span>
                           </span>
                         ) : (
-                          <span
-                            className="sleeve-art artwork-queued"
-                            style={{ background: `radial-gradient(ellipse at 75% 85%, hsl(${25 + index * 17} 26% 31%), transparent 65%), linear-gradient(145deg, #24281f, #353c31)` }}
-                          >
-                            <span className="art-edition">VIBE CHECK / ADDED TO YOUR QUEUE</span>
-                            <strong>{disc.title}</strong>
-                            <span className="art-subtitle">{disc.artist}</span>
-                          </span>
+                          <QueuedArtwork song={disc} />
                         )}
                       </span>
                     </motion.span>
@@ -205,7 +215,6 @@ export function SleeveStage({
       <figcaption>
         <span className="sleeve-caption" aria-live="polite">{caption}</span>
         <small>Hover to explore. Tap a sleeve to inspect.</small>
-        {queuedSongs.length > 0 && <small>Original track lettering. No album covers.</small>}
       </figcaption>
     </motion.figure>
   );

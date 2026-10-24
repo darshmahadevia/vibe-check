@@ -40,7 +40,7 @@ export type ResultState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "ready"; result: Recommendation };
-type QueueState =
+export type QueueState =
   | { kind: "adding"; confirmed: boolean }
   | { kind: "added" }
   | { kind: "error"; message: string; confirmed: boolean };
@@ -62,6 +62,11 @@ export default function Home() {
   >("disconnected");
   const [connectionError, setConnectionError] = useState("");
   const [queues, setQueues] = useState<Record<string, QueueState>>({});
+  const [batchSelection, setBatchSelection] = useState<Set<number>>(new Set());
+  const [batchAdding, setBatchAdding] = useState(false);
+  const [queuePending, setQueuePending] = useState(false);
+  const batchLock = useRef(false);
+  const confirmedQueues = useRef(new Set<string>());
   const [selected, setSelected] = useState<number | null>(null);
   const upload = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
@@ -121,6 +126,7 @@ export default function Home() {
     setInputError("");
     setPhoto({ kind: "preparing" });
     setSelected(null);
+    setBatchSelection(new Set());
     if (previewUrl.current) {
       URL.revokeObjectURL(previewUrl.current);
       previewUrl.current = null;
@@ -156,22 +162,33 @@ export default function Home() {
     recommendation: Recommendation,
     song: RankedCandidate,
     automatic = false,
+    fromBatch = false,
   ) {
-    if (song.resolution.kind !== "verified") return;
+    if (song.resolution.kind !== "verified" || resultRef.current?.requestId !== recommendation.requestId) return false;
     const key = `${recommendation.requestId}:${song.id}`;
-    if (queueLocks.current.has(key)) return;
+    if (queueLocks.current.size || confirmedQueues.current.has(key) || (batchLock.current && !fromBatch)) return false;
     if (automatic && automaticAttempts.current.has(recommendation.requestId))
       return;
     if (automatic) automaticAttempts.current.add(recommendation.requestId);
     queueLocks.current.add(key);
+    setQueuePending(true);
     setQueues((previous) => ({
       ...previous,
       [key]: { kind: "adding", confirmed: hasQueueConfirmation(previous[key]) },
     }));
     try {
       await addToQueue(song.resolution.uri);
+      confirmedQueues.current.add(key);
+      if (resultRef.current?.requestId !== recommendation.requestId) return false;
+      setBatchSelection((previous) => {
+        const next = new Set(previous);
+        next.delete(song.id);
+        return next;
+      });
       setQueues((previous) => ({ ...previous, [key]: { kind: "added" } }));
+      return true;
     } catch (error) {
+      if (resultRef.current?.requestId !== recommendation.requestId) return false;
       setQueues((previous) => ({
         ...previous,
         [key]: {
@@ -184,8 +201,10 @@ export default function Home() {
         },
       }));
       if (!isSpotifyConnected()) setConnection("disconnected");
+      return false;
     } finally {
       queueLocks.current.delete(key);
+      setQueuePending(false);
     }
   }
   async function connect(queueTarget?: RankedCandidate) {
@@ -199,9 +218,10 @@ export default function Home() {
       const current = resultRef.current;
       if (pendingGeneration !== generation.current) return;
       if (queueTarget && current?.requestId !== pendingRequestId) return;
-      const targetId = queueTarget?.id ?? current?.winnerId;
+      const targetId = queueTarget?.id;
       const winner = current?.candidates.find((c) => c.id === targetId);
-      if (current && winner) await queueSong(current, winner, !queueTarget);
+      if (current && winner) await queueSong(current, winner);
+      return true;
     } catch (error) {
       setConnection("disconnected");
       setConnectionError(
@@ -209,6 +229,24 @@ export default function Home() {
           ? error.message
           : "Couldn't connect. Please try again.",
       );
+    }
+  }
+  async function queueSelected() {
+    const current = resultRef.current;
+    if (!current || batchLock.current || queueLocks.current.size || connection === "connecting") return;
+    const songs = current.candidates.filter((song) => batchSelection.has(song.id));
+    if (!songs.length) return;
+    batchLock.current = true;
+    setBatchAdding(true);
+    try {
+      if (!isSpotifyConnected() && !await connect()) return;
+      for (const song of songs) {
+        if (resultRef.current !== current || !isSpotifyConnected()) break;
+        if (!await queueSong(current, song, false, true)) break;
+      }
+    } finally {
+      batchLock.current = false;
+      setBatchAdding(false);
     }
   }
   async function findSong() {
@@ -222,6 +260,7 @@ export default function Home() {
     resultRef.current = null;
     const abort = new AbortController();
     controller.current = abort;
+    setBatchSelection(new Set());
     setResult({ kind: "loading" });
     try {
       const form = new FormData();
@@ -279,6 +318,7 @@ export default function Home() {
     setResult({ kind: "idle" });
     setInputError("");
     setSelected(null);
+    setBatchSelection(new Set());
     setQueues({});
     upload.current?.focus();
   }
@@ -291,7 +331,7 @@ export default function Home() {
           ? [
               [
                 id,
-                { id, title: song.resolution.title, artist: song.resolution.artist },
+                { id, title: song.resolution.title, artist: song.resolution.artist, albumCoverUrl: song.resolution.albumCoverUrl },
               ] satisfies [string, QueuedSong],
             ]
           : [];
@@ -381,7 +421,7 @@ export default function Home() {
                     }
                   : () => connect()
               }
-              disabled={connection === "connecting"}
+              disabled={batchAdding || queuePending || connection === "connecting"}
             >
               <svg
                 width="18"
@@ -443,6 +483,8 @@ export default function Home() {
             layout={reducedMotion ? false : "position"}
             aria-label="Choose a photo"
             className="photo-section"
+            data-photo-state={photo.kind}
+            aria-busy={photo.kind === "preparing"}
           >
             <input
               ref={camera}
@@ -487,7 +529,7 @@ export default function Home() {
                       alt="Your selected photo"
                     />
                   </div>
-                  <div className="photo-copy">
+                  <div className="photo-copy" role="status">
                     <strong>Your moment, ready to play.</strong>
                     <span>Choose a different photo anytime.</span>
                   </div>
@@ -514,13 +556,13 @@ export default function Home() {
                       />
                     </svg>
                   </div>
-                  <div className="empty-photo photo-copy">
+                  <div className="empty-photo photo-copy" role="status">
                     <strong>
                       {photo.kind === "preparing"
                         ? "Preparing your photo…"
                         : "It starts with your photo."}
                     </strong>
-                    <span>Drop a JPEG, PNG, or WebP here.</span>
+                    <span>{photo.kind === "preparing" ? "Making it ready for its soundtrack." : "Drag an image here, or choose one below."}</span>
                   </div>
                 </>
               )}
@@ -700,7 +742,7 @@ export default function Home() {
                       </p>
                       <button
                         disabled={
-                          winnerQueue?.kind === "adding" ||
+                          batchAdding || queuePending || winnerQueue?.kind === "adding" ||
                           connection === "connecting"
                         }
                         onClick={() =>
@@ -743,21 +785,39 @@ export default function Home() {
               selectedId={selected}
               onSelect={setSelected}
               detailsRef={details}
+              queueSelection={batchSelection}
+              queues={queues}
+              queueBusy={batchAdding || queuePending || connection === "connecting"}
+              onToggleQueue={(id) => setBatchSelection((previous) => {
+                const next = new Set(previous);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                return next;
+              })}
+              onSelectAvailable={() => setBatchSelection(new Set(recommendation.candidates
+                .filter((song) => song.resolution.kind === "verified" &&
+                  !hasQueueConfirmation(queues[`${recommendation.requestId}:${song.id}`]) &&
+                  queues[`${recommendation.requestId}:${song.id}`]?.kind !== "adding")
+                .map((song) => song.id)))}
+              onClearQueue={() => setBatchSelection(new Set())}
+              onQueueSelected={() => void queueSelected()}
+              connected={connection === "connected"}
             >
               {comparison &&
                 comparison.id !== recommendation.winnerId &&
                 comparison.resolution.kind === "verified" && (
                   <div className="comparison-queue">
                     <button
-                      disabled={comparisonQueue?.kind === "adding"}
+                      disabled={batchAdding || queuePending || connection === "connecting" || comparisonQueue?.kind === "adding" || hasQueueConfirmation(comparisonQueue)}
                       onClick={() =>
                         connection === "connected"
                           ? queueSong(recommendation, comparison)
                           : connect(comparison)
                       }
                     >
-                      {connection === "connected"
-                        ? "Add to queue instead"
+                      {hasQueueConfirmation(comparisonQueue)
+                        ? "Added to queue"
+                        : connection === "connected"
+                        ? "Add this song to queue"
                         : "Connect Spotify to queue songs"}
                     </button>
                     <p aria-live="polite">
@@ -783,7 +843,7 @@ export default function Home() {
           <span>Gemma reads the mood. Code makes the match.</span>
           <span>
             Queue mode needs Spotify Premium and an allowlisted account.
-            Connecting enables automatic queueing.
+            Your top match queues automatically when Spotify is connected.
           </span>
         </footer>
       </main>

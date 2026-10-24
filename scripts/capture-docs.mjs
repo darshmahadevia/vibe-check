@@ -52,7 +52,7 @@ const { chromium } = await import(
     await page.mouse.move(0, 0);
     await waitForPlayer();
     await page.locator(".results").screenshot({ ...captureOptions, path: path.join(directory, "results.png") });
-    await page.locator(".analysis-overview").screenshot({ ...captureOptions, path: path.join(directory, "analysis.png") });
+    await page.locator(".analysis-workbench").screenshot({ ...captureOptions, path: path.join(directory, "analysis.png") });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: "networkidle" });
     await page.getByRole("heading", { level: 1 }).waitFor();

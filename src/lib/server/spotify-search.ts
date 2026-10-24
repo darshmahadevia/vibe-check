@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { resolutionSchema, type Candidate, type Resolution } from "../mood";
+import { albumCoverUrlSchema, resolutionSchema, type Candidate, type Resolution } from "../mood";
 
 const tokenSchema = z.object({
   access_token: z.string().min(1),
@@ -14,6 +14,9 @@ const searchSchema = z.object({
         z.object({
           id: z.string().regex(/^[A-Za-z0-9]{22}$/),
           name: z.string().trim().min(1).max(600),
+          album: z.object({
+            images: z.array(z.object({ url: z.unknown() })).max(20),
+          }).optional().catch(undefined),
           artists: z
             .array(z.object({ name: z.string().trim().min(1).max(600) }))
             .min(1),
@@ -112,6 +115,9 @@ async function search(candidate: Candidate): Promise<Resolution> {
     url: `https://open.spotify.com/track/${track.id}`,
     title: track.name,
     artist: track.artists.map((artist) => artist.name).join(", "),
+    albumCoverUrl: track.album?.images
+      .map((image) => albumCoverUrlSchema.safeParse(image.url))
+      .find((image) => image.success)?.data,
   });
 }
 
