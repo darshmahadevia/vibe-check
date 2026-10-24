@@ -36,7 +36,7 @@ export async function analyzePhoto(image: Uint8Array): Promise<Analysis> {
       if (status === 429) throw new RecommendationError("quota", "Too many requests right now. Wait a minute and try again.", 429);
       throw new RecommendationError("model_unavailable", "Couldn't reach Gemma right now. Please try again.", 503);
     }
-    try { return parseAnalysis(text); } catch { /* Only invalid model output permits a second generation. */ }
+    try { return parseAnalysis(text); } catch { continue; }
   }
   throw new RecommendationError("invalid_output", "Couldn't read the vibe of that one. Try a different photo.", 502);
 }
